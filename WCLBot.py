@@ -3,6 +3,7 @@ import asyncio
 import time
 import os
 import pickle
+import pycraftlogs as pcl
 
 client = discord.Client()
 
@@ -11,6 +12,7 @@ tts_lock = asyncio.Lock()
 
 enabled = True
 message_channel = None
+current_key = ""
 
 @client.event
 @asyncio.coroutine
@@ -25,9 +27,19 @@ def on_ready():
 def on_message(message):
     global message_channel
     global enabled
+    global current_key
 
     print(message.author.name)
     print(message.content)
+
+    if(message.content.startswith("!report ")):
+        report = message.content.split(" ")[1]
+        table = pcl.wow_report_tables("damage-done",report, end=9999999, key=current_key)
+        yield from client.send_message(message.channel, table[0].name)
+    if(message.content.startswith("!key ")):
+        new_key = message.content.split(" ")[1]
+        current_key = new_key
+        yield from client.send_message(message.channel, "Key updated to " + current_key)
 
 @client.event
 @asyncio.coroutine
