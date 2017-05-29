@@ -26,3 +26,14 @@ class ServerInfo(object):
 
     def set_default_channel(self, channelID):
         self.default_channel = channelID
+
+    def __str__(self):
+        string = ("server_id="+self.server_id+"\n"
+               + "admins="+str(self.admins)+"\n"
+               + "guild_name="+self.guild_name+"\n"
+               + "guild_realm="+self.guild_realm+"\n"
+               + "guild_region="+self.guild_region+"\n"
+               + "auto_report="+str(self.auto_report)+"\n"
+               + "default_channel="+self.default_channel+"\n"
+               + "auto_report_mode_long="+str(self.auto_report_mode_long)+"\n")
+        return string

@@ -1,4 +1,6 @@
-.token
+.keyfile
 pycraftlogs
 pycraftlogs/*
 __*
+data
+data/*
