@@ -13,8 +13,7 @@ player_lock = asyncio.Lock()
 tts_lock = asyncio.Lock()
 
 enabled = True
-message_channel = None
-current_key = ""
+current_key = None
 server_settings = dict()
 
 @client.event
@@ -28,7 +27,6 @@ def on_ready():
 @client.event
 @asyncio.coroutine
 def on_message(message):
-    global message_channel
     global enabled
     global current_key
 
@@ -37,12 +35,20 @@ def on_message(message):
 
     if(message.content.startswith("!winitialize")):
         yield from initialize_new_server(message)
-        #yield from client.send_message(message.channel, "Initialized")
-    if(message.content.startswith("!report ")):
+    else if(message.content.startswith("!wguild ") and verify_user_admin(msg.author.id, msg.server.id)):
+        #format <guildname> <realmname>-<region>
+        yield from update_server_guild_info(message)
+    else if(message.content.equals("!wchannel") and verify_user_admin(msg.author.id, msg.server.id)):
+        #no extra arguments - set speaking channel to channel msg is sent in
+        yield from update_server_default_channel(message) 
+    else if(message.content.startswith("!wadmin ") and verify_user_admin(msg.author.id, msg.server.id)):
+        #argument should be user IDs OR @ messages to the user(s)
+        yield from add_server_admin(message) 
+    else if(message.content.startswith("!wreport ")):
         report = message.content.split(" ")[1]
         table = pcl.wow_report_tables("damage-done",report, end=9999999, key=current_key)
         yield from client.send_message(message.channel, table[0].name)
-    if(message.content.startswith("!key ")):
+    else if(message.content.startswith("!wkey ")):
         new_key = message.content.split(" ")[1]
         current_key = new_key
         yield from client.send_message(message.channel, "Key updated to " + current_key)
@@ -56,9 +62,6 @@ def on_voice_state_update(before, after):
 
 def initialize_new_server(msg):
     global server_settings
-    if msg.server.id in server_settings:
-        yield from client.send_message(msg.channel, "Server already initialized.")
-        return False
     else:
         new_server_info = ServerInfo(msg.server.id)
         print(msg.author.id)
@@ -67,9 +70,51 @@ def initialize_new_server(msg):
         yield from client.send_message(msg.channel, "Added new server and admin.")
         return True
 
+def verify_user_admin(userID, serverID):
+    global server_settings
+    if(serverID not in server_settings):
+        return False
+    serv_info = server_settings[serverID]
+    if userID in serv_info.admins:
+        return True
+    else:
+        return False
+
+def update_server_guild_info(msg):
+    global server_settings
+    serv_info = server_settings[msg.server.id]
+    serv_info.update_guild(msg.content.split(" ")[1], 
+                           msg.content.split(" ")[2].split("-")[0], 
+                           msg.content.split(" ")[2].split("-")[1]
+                           )
+    server_settings[msg.server.id] = serv_info
+    return True
+
+def update_server_default_channel(msg):
+    global server_settings
+    serv_info = server_settings[msg.server.id]
+    serv_info.set_default_channel(msg.channel.id)
+    server_settings[msg.server.id] = serv_info
+    return True
+
+def add_server_admin(msg):
+    global server_settings
+    serv_info = server_settings[msg.server.id]
+    if(len(msg.mentions) > 0):
+        for(admin in msg.mentions):
+            serv_info.add_admin(admin.id)
+    else:
+        for(admin in msg.content.split(" ")):
+            if(msg.server.get_member(admin) not == None):
+                serv_info.add_admin()
+    server_settings[message.server.id] = serv_info
+    return True
+
 if(os.environ.get('DISCORD_TOKEN') == None):
     token = input("You must specify the discord bot token: ")
     os.environ['DISCORD_TOKEN'] = token
+if(current_key==None)
+    current_key = input("You must specify the WCL API key: ")
 
 while(True):
     try:

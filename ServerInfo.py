@@ -23,3 +23,6 @@ class ServerInfo(object):
 
     def add_admin(self, userID):
         self.admins.append(userID)
+
+    def set_default_channel(self, channelID):
+        self.default_channel = channelID
