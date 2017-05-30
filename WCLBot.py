@@ -1,6 +1,7 @@
 import discord
 import asyncio
 import time
+import datetime
 import os
 import pickle
 import pycraftlogs as pcl
@@ -77,8 +78,8 @@ def on_message(message):
         yield from add_server_admin(message) 
     elif(message.content.startswith("!wreport ")):
         report = message.content.split(" ")[1]
-        table = pcl.wow_report_tables("damage-done",report, end=9999999, key=current_key)
-        yield from client.send_message(message.channel, table[0].name)
+        string = report_summary_string_long(get_report(report))
+        yield from client.send_message(message.channel, "```"+string+"```")
     elif(message.content.startswith("!wkey ")):
         new_key = message.content.split(" ")[1]
         current_key = new_key
@@ -186,6 +187,52 @@ def get_key(key_name):
             return x.split(":")[1].strip()
     print(str("Key "+key_name+" not found."))
     return None
+
+def report_summary_string(report):
+    date = datetime.datetime.fromtimestamp(report.start/1000).strftime('%Y-%m-%d')
+    string = (str(report.id) + " - " + report.title + ". Uploaded by "
+             + report.owner + " (" + date + ")")
+    return string
+
+def report_summary_string_long(report):
+    global current_key
+    string = report_summary_string(report) + "\n"
+    fightlist = pcl.generate_fight_list(report.id, current_key)
+    fightlist_string = ""
+    for fight in fightlist:
+        if fight.boss == 1:
+            fightlist_string += fight.name + " "
+    string += "\n " + fightlist_string
+    topdmg_table = pcl.wow_report_tables("damage-done", report.id, key=current_key, end=report.end-report.start)
+    topdmg_string = "\n DAMAGE DONE \n" + table_string(topdmg_table, 3)
+    topheal_table = pcl.wow_report_tables("healing", report.id, key=current_key, end=report.end-report.start)
+    topheal_string = "\n HEALING \n" + table_string(topheal_table, 3)
+    string += topdmg_string + topheal_string
+    return string
+
+def table_string(table, length):
+    #Takes a table with a total (healing, damage-done, damage-taken, casts and summons)
+    string = ""
+    table.sort(key=lambda x: x.total)
+    table.reverse()
+    total = 0
+    for entry in table:
+        total += entry.total
+    for i in range(0,min(length,len(table))):
+        string += table_string_row(table[i], total)+"\n"
+    return string
+
+
+def table_string_row(table_entry, total):
+    format_str = "{0.name:<13}".format(table_entry)
+    format_str += "{0.total:>12} ".format(table_entry)
+    format_str += "{:.2%} ".format(table_entry.total/total)
+    return format_str
+
+def get_report(reportID):
+    global current_key
+    return pcl.wow_get_report(reportID, key=current_key)
+
 
 os.environ['DISCORD_TOKEN'] = get_key("discord_bot_token")
 current_key = get_key("warcraftlogs_public_key")
