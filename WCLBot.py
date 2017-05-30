@@ -16,6 +16,28 @@ enabled = True
 current_key = None
 server_settings = dict()
 
+serv_not_registered_msg = ("Whoops! This server is not yet registered. Please "
+                          + "have your server admin use the !winitialize command "
+                          + "(!whelp for more info)!"
+                          )
+help_msg = ("Hello! I'm Weasel the WarcraftLogs API Discord bot! I can be "
+           + "used to view logs at a glance, track attendance, brag about "
+           + "parses and more! For help with setup, type '!wsetup'. For a "
+           + "full command list, type '!wcommands'. I was created by "
+           + "sircinnamon@gmail.com."
+           )
+setup_help_msg = ("If you are an admin, start by typing '!winitialize' to "
+                 + "add your server to the registry. This will allow you "
+                 + "to use the bot. To set up automatic log tracking, "
+                 + "first type '!wguild <guildname> <realm>-<region>'."
+                 + "To enable automatic log reporting, type '!wautolog'."
+                 + "To enable long form reporting, type '!wlonglog'."
+                 + "To change the channel the bot posts in, type '!wchannel' "
+                 + "in a channel the bot can view. To allow others to change "
+                 + "these settings, type '!wadmin' followed by an @ to all the " 
+                 + "desired users."
+                 )
+command_list_msg = ("Command list to be added.")
 @client.event
 @asyncio.coroutine
 def on_ready():
@@ -36,6 +58,14 @@ def on_message(message):
 
     if(message.content.startswith("!winitialize")):
         yield from initialize_new_server(message)
+    elif(message.content.startswith("!whelp")):
+        yield from client.send_message(message.channel, help_msg)
+    elif(message.content.startswith("!wsetup")):
+        yield from client.send_message(message.channel, setup_help_msg)
+    elif(message.content.startswith("!wcommands")):
+        yield from client.send_message(message.channel, command_list_msg)
+    elif(message.content.startswith("!w") and not verify_server_registered(message.server.id)):
+        yield from client.send_message(message.channel, serv_not_registered_msg)
     elif(message.content.startswith("!wguild ") and verify_user_admin(message.author.id, message.server.id)):
         #format <guildname> <realmname>-<region>
         yield from update_server_guild_info(message)
@@ -87,6 +117,13 @@ def verify_user_admin(userID, serverID):
         return True
     else:
         return False
+
+def verify_server_registered(serverID):
+    global server_settings
+    if(serverID not in server_settings):
+        return False
+    else:
+        return True
 
 def update_server_guild_info(msg):
     global server_settings
