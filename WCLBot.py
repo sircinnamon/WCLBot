@@ -199,14 +199,14 @@ def report_summary_string_long(report):
     string = report_summary_string(report) + "\n"
     fightlist = pcl.generate_fight_list(report.id, current_key)
     fightlist_string = ""
-    for fight in fightlist:
-        if fight.boss == 1:
+    for fight in fightlist: #TODO - REPORT EACH FIGHT ONLY ONCE (x# for number of pulls)
+        if fight.boss != 0:
             fightlist_string += fight.name + " "
-    string += "\n " + fightlist_string
+    string += "\n*FIGHTS* \n" + fightlist_string
     topdmg_table = pcl.wow_report_tables("damage-done", report.id, key=current_key, end=report.end-report.start)
-    topdmg_string = "\n DAMAGE DONE \n" + table_string(topdmg_table, 3)
+    topdmg_string = "\n*DAMAGE DONE* \n" + table_string(topdmg_table, 3)
     topheal_table = pcl.wow_report_tables("healing", report.id, key=current_key, end=report.end-report.start)
-    topheal_string = "\n HEALING \n" + table_string(topheal_table, 3)
+    topheal_string = "\n*HEALING* \n" + table_string(topheal_table, 3)
     string += topdmg_string + topheal_string
     return string
 
@@ -225,13 +225,21 @@ def table_string(table, length):
 
 def table_string_row(table_entry, total):
     format_str = "{0.name:<13}".format(table_entry)
-    format_str += "{0.total:>12} ".format(table_entry)
+    format_str += "{0:>12} ".format(abbreviate_num(table_entry.total))
     format_str += "{:.2%} ".format(table_entry.total/total)
     return format_str
+
+def abbreviate_num(num):
+    for unit in ['K','M','B']:
+        if(abs(num)<1000):
+            return "{0:3.2f}{1:s}}".format(num, unit)
+        num /= 1000
+    return "{0:.2f}{1:2}".format(num, "T")
 
 def get_report(reportID):
     global current_key
     return pcl.wow_get_report(reportID, key=current_key)
+
 
 
 os.environ['DISCORD_TOKEN'] = get_key("discord_bot_token")
