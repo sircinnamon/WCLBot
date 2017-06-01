@@ -5,6 +5,7 @@ import datetime
 import os
 import pickle
 import pycraftlogs as pcl
+from threading import Timer, Thread
 
 from ServerInfo import ServerInfo
 
@@ -16,6 +17,7 @@ tts_lock = asyncio.Lock()
 enabled = True
 current_key = None
 server_settings = dict()
+thread_list = list()
 
 serv_not_registered_msg = ("Whoops! This server is not yet registered. Please "
                           + "have your server admin use the !winitialize command "
@@ -42,11 +44,13 @@ command_list_msg = ("Command list to be added.")
 @client.event
 @asyncio.coroutine
 def on_ready():
+    global thread_list
+    load_server_settings()
     print('Logged in as')
     print(client.user.name)
     print(client.user.id)
     print('------')
-    load_server_settings()
+    thread_list = startup_auto_report()
 
 @client.event
 @asyncio.coroutine
@@ -76,10 +80,23 @@ def on_message(message):
     elif(message.content.startswith("!wadmin ") and verify_user_admin(message.author.id, message.server.id)):
         #argument should be user IDs OR @ messages to the user(s)
         yield from add_server_admin(message) 
-    elif(message.content.startswith("!wreport ")):
-        report = message.content.split(" ")[1]
-        string = report_summary_string_long(get_report(report))
+    elif(message.content.startswith("!wreport")):
+        if(len(message.content.split(" ")) < 2): 
+            string = report_summary_string_long(most_recent_report(message.server.id))
+        else: 
+            report = message.content.split(" ")[1]
+            string = report_summary_string_long(get_report(report))
         yield from client.send_message(message.channel, "```"+string+"```")
+    elif(message.content.startswith("!wfights")):
+        if(len(message.content.split(" ")) < 2): report = most_recent_report(message.server.id).id
+        else: report = message.content.split(" ")[1]
+        string = fight_list_string_long(pcl.generate_fight_list(report, key=current_key))
+        string = report_summary_string(get_report(report)) + string
+        yield from client.send_message(message.channel, "```"+string+"```")
+    elif(message.content.startswith("!wauto")):
+        yield from toggle_auto_report(message)
+    elif(message.content.startswith("!wlongmode")):
+        yield from toggle_auto_report_mode(message)
     elif(message.content.startswith("!wkey ")):
         new_key = message.content.split(" ")[1]
         current_key = new_key
@@ -87,6 +104,9 @@ def on_message(message):
     elif(message.content.startswith("!wtest")):
         string = str(server_settings[message.server.id])
         yield from client.send_message(message.channel, "```"+string+"```")
+    elif(message.content.startswith("!wcheat")):
+        num = int(message.content.split()[1])
+        __test(message, num)
 
 @client.event
 @asyncio.coroutine
@@ -190,18 +210,15 @@ def get_key(key_name):
 
 def report_summary_string(report):
     date = datetime.datetime.fromtimestamp(report.start/1000).strftime('%Y-%m-%d')
-    string = (str(report.id) + " - " + report.title + ". Uploaded by "
-             + report.owner + " (" + date + ")")
+    string = (report.title + ". Uploaded by " + report.owner + ". - " 
+              + str(report.id) + " (" + date + ")\n")
     return string
 
 def report_summary_string_long(report):
     global current_key
     string = report_summary_string(report) + "\n"
-    fightlist = pcl.generate_fight_list(report.id, current_key)
-    fightlist_string = ""
-    for fight in fightlist: #TODO - REPORT EACH FIGHT ONLY ONCE (x# for number of pulls)
-        if fight.boss != 0:
-            fightlist_string += fight.name + " "
+    fightlist = pcl.generate_fight_list(report.id, key=current_key)
+    fightlist_string = fight_list_string_short(fightlist)
     string += "\n*FIGHTS* \n" + fightlist_string
     topdmg_table = pcl.wow_report_tables("damage-done", report.id, key=current_key, end=report.end-report.start)
     topdmg_string = "\n*DAMAGE DONE* \n" + table_string(topdmg_table, 3)
@@ -230,17 +247,138 @@ def table_string_row(table_entry, total):
     return format_str
 
 def abbreviate_num(num):
-    for unit in ['K','M','B']:
+    for unit in ['K','M','B','T','Q']:
         if(abs(num)<1000):
-            return "{0:3.2f}{1:s}}".format(num, unit)
+            return "{0:3.2f}{1:s}".format(num, unit)
         num /= 1000
-    return "{0:.2f}{1:2}".format(num, "T")
+    return "{0:.2f}{1:2}".format(num, "Qt")
+
+def fight_list_string_short(fightlist):
+    string = ""
+    newlist = list()
+    for fight in fightlist:
+        if fight.boss != 0:
+            newlist.append((fight.name,fight.difficulty))
+    fightlist = newlist
+    counted = list()
+    for fight in fightlist:
+        if(fight not in counted):
+            difficulty = get_difficulty(fight[1])[0]
+            string += "{0} {1:<25}".format(difficulty,fight[0])
+            if(fightlist.count(fight)>1):
+                string+=" x"+str(fightlist.count(fight))
+            string+="\n"
+            counted.append(fight)
+    return string
+
+def fight_list_string_long(fightlist):
+    string = ""
+    for fight in fightlist:
+        if(fight.boss != 0):
+            print(str(fight.id) + " " + fight.name + " " + str(fight.boss) + str(fight.kill))
+            difficulty = get_difficulty(fight.difficulty)[0]
+            string += "{0:>3}: {1} {2:<25} - ".format(fight.id, difficulty, fight.name)
+            if(fight.kill == False):
+                string+=" Wipe:{:{align}{width}.2%}".format(fight.fightPercentage/10000,width=6,align=">")
+            else:
+                string+=" Kill"
+            string+="\n"
+    return string
+
+def get_difficulty(int):
+    difficulties = ["","","LFR","Normal","Heroic","Mythic"]
+    return difficulties[int]
 
 def get_report(reportID):
     global current_key
     return pcl.wow_get_report(reportID, key=current_key)
 
+def most_recent_report(serverID):
+    global server_settings
+    global current_key
+    info = server_settings[serverID]
+    if not info.has_guild:
+        return None
+    else:
+        reports = pcl.generate_guild_report_list(info.guild_name, info.guild_realm, info.guild_region, key=current_key)
+        return reports[len(reports)-1]
 
+def toggle_auto_report(msg):
+    global server_settings
+    server_settings[msg.server.id].toggle_auto_report()
+    save_server_settings()
+    yield from client.send_message(msg.channel, "Auto Report mode is now set to "+str(server_settings[msg.server.id].auto_report)+".")
+
+def toggle_auto_report_mode(msg):
+    global server_settings
+    server_settings[msg.server.id].toggle_auto_report_mode()
+    save_server_settings()
+    yield from client.send_message(msg.channel, "Long Auto Report mode is now set to "+str(server_settings[msg.server.id].auto_report_mode_long)+".")
+
+def auto_report_trigger(serverID):
+    print("Timer fired for server "+serverID, flush=True)
+    global server_settings
+    global current_key
+    global thread_list
+    global client
+
+    serv_info = server_settings[serverID]
+    if(serv_info.auto_report == False):
+        #Cancel the auto report without refreshing
+        return
+    elif(serv_info.most_recent_log_start == 0):
+        #If it's never been run, dont report old logs
+        serv_info.most_recent_log_start = most_recent_report(serverID).start
+    #Check for reports newer than the newest known by auto
+    reports = pcl.generate_guild_report_list(serv_info.guild_name, 
+                                             serv_info.guild_realm, 
+                                             serv_info.guild_region, 
+                                             start=serv_info.most_recent_log_start+1,
+                                             key=current_key)
+    for r in reports:
+        if(serv_info.auto_report_mode_long):
+            string = report_summary_string_long(r)
+        else:
+            string = report_summary_string(r)
+        print(string, flush=True)
+        yield from client.send_message(serv_info.default_channel, "```"+string+"```")
+    if(len(reports) != 0):
+        serv_info.update_recent_log(reports[len(reports)-1].start)
+        server_settings[serverID] = serv_info
+        save_server_settings()
+    #trigger timer for next auto check
+    t = Timer(30, auto_report_trigger, args=(serverID,))
+    t.daemon = True
+    t.start()
+    thread_list.append(t)
+    print("New Thread "+serverID, flush=True)
+
+def startup_auto_report():
+    global server_settings
+    global client
+    timers = list()
+    for serv in server_settings.values():
+        if(serv.auto_report and serv.has_guild()):
+            t = Timer(3, auto_report_trigger, args=(serv.server_id,))
+            t.daemon = True
+            t.start()
+            t.name = serv.server_id
+            print(serv.server_id)
+            timers.append(t)
+    return timers
+
+def __test(msg, num):
+    global server_settings
+    global thread_list
+    print("Threads:")
+    for thread in thread_list:
+        print(thread.name)
+        print(str(thread.is_alive()))
+    server_settings[msg.server.id].most_recent_log_start = num
+
+@asyncio.coroutine
+def send_msg(channel, msg):
+    yield from client.send_message(channel, msg)
 
 os.environ['DISCORD_TOKEN'] = get_key("discord_bot_token")
 current_key = get_key("warcraftlogs_public_key")
