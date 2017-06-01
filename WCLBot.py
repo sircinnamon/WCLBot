@@ -6,6 +6,7 @@ import os
 import pickle
 import pycraftlogs as pcl
 from threading import Timer, Thread
+from collections import deque
 
 from ServerInfo import ServerInfo
 
@@ -18,6 +19,7 @@ enabled = True
 current_key = None
 server_settings = dict()
 thread_list = list()
+report_queue = deque()
 
 serv_not_registered_msg = ("Whoops! This server is not yet registered. Please "
                           + "have your server admin use the !winitialize command "
@@ -60,6 +62,8 @@ def on_message(message):
 
     print(message.author.name)
     print(message.content)
+
+    yield from check_report_queue()
 
     if(message.content.startswith("!winitialize")):
         yield from initialize_new_server(message)
@@ -320,7 +324,7 @@ def auto_report_trigger(serverID):
     global server_settings
     global current_key
     global thread_list
-    global client
+    global report_queue
 
     serv_info = server_settings[serverID]
     if(serv_info.auto_report == False):
@@ -340,8 +344,11 @@ def auto_report_trigger(serverID):
             string = report_summary_string_long(r)
         else:
             string = report_summary_string(r)
-        print(string, flush=True)
-        yield from client.send_message(serv_info.default_channel, "```"+string+"```")
+        #print(string, flush=True)
+        #yield from client.send_message(serv_info.default_channel, "```"+string+"```")
+        server = discord.utils.get(client.servers, id=serv_info.server_id)
+        channel = discord.utils.get(server.channels, id=serv_info.default_channel)
+        report_queue.append((channel, "```"+string+"```"))
     if(len(reports) != 0):
         serv_info.update_recent_log(reports[len(reports)-1].start)
         server_settings[serverID] = serv_info
@@ -351,7 +358,7 @@ def auto_report_trigger(serverID):
     t.daemon = True
     t.start()
     thread_list.append(t)
-    print("New Thread "+serverID, flush=True)
+    #print("New Thread "+serverID, flush=True)
 
 def startup_auto_report():
     global server_settings
@@ -363,22 +370,32 @@ def startup_auto_report():
             t.daemon = True
             t.start()
             t.name = serv.server_id
-            print(serv.server_id)
+            #print(serv.server_id)
             timers.append(t)
     return timers
 
 def __test(msg, num):
     global server_settings
     global thread_list
-    print("Threads:")
-    for thread in thread_list:
-        print(thread.name)
-        print(str(thread.is_alive()))
+    # print("Threads:")
+    # for thread in thread_list:
+    #     print(thread.name)
+    #     print(str(thread.is_alive()))
     server_settings[msg.server.id].most_recent_log_start = num
 
 @asyncio.coroutine
 def send_msg(channel, msg):
     yield from client.send_message(channel, msg)
+
+@asyncio.coroutine
+def check_report_queue():
+    global report_queue
+    #while(len(report_queue)==0):
+        #time.sleep(10)
+    while(len(report_queue)>0):
+        rep = report_queue.popleft()
+        yield from client.send_message(rep[0], rep[1])
+    #check_report_queue()
 
 os.environ['DISCORD_TOKEN'] = get_key("discord_bot_token")
 current_key = get_key("warcraftlogs_public_key")
