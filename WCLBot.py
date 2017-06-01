@@ -53,6 +53,7 @@ def on_ready():
     print(client.user.id)
     print('------')
     thread_list = startup_auto_report()
+    asyncio.ensure_future(check_report_queue())
 
 @client.event
 @asyncio.coroutine
@@ -62,8 +63,6 @@ def on_message(message):
 
     print(message.author.name)
     print(message.content)
-
-    yield from check_report_queue()
 
     if(message.content.startswith("!winitialize")):
         yield from initialize_new_server(message)
@@ -354,7 +353,7 @@ def auto_report_trigger(serverID):
         server_settings[serverID] = serv_info
         save_server_settings()
     #trigger timer for next auto check
-    t = Timer(30, auto_report_trigger, args=(serverID,))
+    t = Timer(600, auto_report_trigger, args=(serverID,))
     t.daemon = True
     t.start()
     thread_list.append(t)
@@ -390,12 +389,12 @@ def send_msg(channel, msg):
 @asyncio.coroutine
 def check_report_queue():
     global report_queue
-    #while(len(report_queue)==0):
-        #time.sleep(10)
+    while(len(report_queue)==0):
+        yield from asyncio.sleep(15)
     while(len(report_queue)>0):
         rep = report_queue.popleft()
         yield from client.send_message(rep[0], rep[1])
-    #check_report_queue()
+    asyncio.ensure_future(check_report_queue())
 
 os.environ['DISCORD_TOKEN'] = get_key("discord_bot_token")
 current_key = get_key("warcraftlogs_public_key")
