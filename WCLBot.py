@@ -152,9 +152,10 @@ def verify_server_registered(serverID):
 def update_server_guild_info(msg):
     global server_settings
     serv_info = server_settings[msg.server.id]
-    serv_info.update_guild(msg.content.split(" ")[1], 
-                           msg.content.split(" ")[2].split("-")[0], 
-                           msg.content.split(" ")[2].split("-")[1]
+    guildname = " ".join(msg.content.split(" ")[1:(len(msg.content.split(" "))-1)])
+    serv_info.update_guild(guildname, 
+                           msg.content.split(guildname+" ")[1].split("-")[0], 
+                           msg.content.split(guildname+" ")[1].split("-")[1]
                            )
     server_settings[msg.server.id] = serv_info
     save_server_settings()
@@ -333,11 +334,15 @@ def auto_report_trigger(serverID):
         #If it's never been run, dont report old logs
         serv_info.most_recent_log_start = most_recent_report(serverID).start
     #Check for reports newer than the newest known by auto
-    reports = pcl.generate_guild_report_list(serv_info.guild_name, 
-                                             serv_info.guild_realm, 
-                                             serv_info.guild_region, 
-                                             start=serv_info.most_recent_log_start+1,
-                                             key=current_key)
+    reports = list()
+    try:
+        reports = pcl.generate_guild_report_list(serv_info.guild_name, 
+                                                 serv_info.guild_realm, 
+                                                 serv_info.guild_region, 
+                                                 start=serv_info.most_recent_log_start+1,
+                                                 key=current_key)
+    except HTTPError:
+        print("HTTP Error: "+str(HTTPError))
     for r in reports:
         if(serv_info.auto_report_mode_long):
             string = report_summary_string_long(r)
