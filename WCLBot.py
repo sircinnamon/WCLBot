@@ -55,6 +55,7 @@ def on_ready():
     print("Current servers:")
     for server in client.servers:
         print(server.name + " ("+server.id+")")
+    print('------')
     thread_list = startup_auto_report()
     asyncio.ensure_future(check_report_queue())
     asyncio.ensure_future(check_server_memberships())
@@ -65,7 +66,7 @@ def on_message(message):
     global enabled
     global current_key
 
-    print(message.author.name)
+    print(message.server.name+"/"+message.channel.name+" "+message.author.name+":")
     print(message.content)
 
     if(message.content.startswith("!winitialize")):
