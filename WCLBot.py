@@ -54,6 +54,7 @@ def on_ready():
     print('------')
     thread_list = startup_auto_report()
     asyncio.ensure_future(check_report_queue())
+    asyncio.ensure_future(check_server_memberships())
 
 @client.event
 @asyncio.coroutine
@@ -96,18 +97,14 @@ def on_message(message):
         string = fight_list_string_long(pcl.generate_fight_list(report, key=current_key))
         string = report_summary_string(get_report(report)) + string
         yield from client.send_message(message.channel, "```"+string+"```")
-    elif(message.content.startswith("!wauto")):
+    elif(message.content.startswith("!wauto") and verify_user_admin(message.author.id, message.server.id)):
         yield from toggle_auto_report(message)
-    elif(message.content.startswith("!wlongmode")):
+    elif(message.content.startswith("!wlongmode") and verify_user_admin(message.author.id, message.server.id)):
         yield from toggle_auto_report_mode(message)
-    elif(message.content.startswith("!wkey ")):
-        new_key = message.content.split(" ")[1]
-        current_key = new_key
-        yield from client.send_message(message.channel, "Key updated to " + current_key)
-    elif(message.content.startswith("!wtest")):
+    elif(message.content.startswith("!wtest") and verify_user_admin(message.author.id, message.server.id)):
         string = str(server_settings[message.server.id])
         yield from client.send_message(message.channel, "```"+string+"```")
-    elif(message.content.startswith("!wcheat")):
+    elif(message.content.startswith("!wcheat") and verify_user_admin(message.author.id, message.server.id)):
         num = int(message.content.split()[1])
         __test(message, num)
 
@@ -309,8 +306,19 @@ def most_recent_report(serverID):
 
 def toggle_auto_report(msg):
     global server_settings
+    global thread_list
+    if not (server_settings[msg.server.id].has_guild()):
+        yield from client.send_message(msg.channel, "You must set a server guild first!")
+        return
     server_settings[msg.server.id].toggle_auto_report()
     save_server_settings()
+    #start thread for server
+    t = Timer(3, auto_report_trigger, args=(serv.server_id,))
+    t.daemon = True
+    t.start()
+    t.name = serv.server_id
+    #print(serv.server_id)
+    thread_list.append(t)
     yield from client.send_message(msg.channel, "Auto Report mode is now set to "+str(server_settings[msg.server.id].auto_report)+".")
 
 def toggle_auto_report_mode(msg):
@@ -326,6 +334,8 @@ def auto_report_trigger(serverID):
     global thread_list
     global report_queue
 
+    if(serverID not in server_settings):
+        return
     serv_info = server_settings[serverID]
     if(serv_info.auto_report == False):
         #Cancel the auto report without refreshing
@@ -358,7 +368,7 @@ def auto_report_trigger(serverID):
         server_settings[serverID] = serv_info
         save_server_settings()
     #trigger timer for next auto check
-    t = Timer(600, auto_report_trigger, args=(serverID,))
+    t = Timer(300, auto_report_trigger, args=(serverID,))
     t.daemon = True
     t.start()
     thread_list.append(t)
@@ -400,6 +410,19 @@ def check_report_queue():
         rep = report_queue.popleft()
         yield from client.send_message(rep[0], rep[1])
     asyncio.ensure_future(check_report_queue())
+
+@asyncio_coroutine
+def check_server_memberships():
+    global server_settings
+    yield from asyncio.sleep(3600)
+    active_servers = list([x.id for x in client.servers])
+    for(entry in server_settings):
+        if entry.id not in active_servers:
+            del server_settings[entry.id]
+            print("Server "+entry.id + " removed from memory.")
+            save_server_settings()
+    asyncio.ensure_future(check_server_memberships())
+
 
 os.environ['DISCORD_TOKEN'] = get_key("discord_bot_token")
 current_key = get_key("warcraftlogs_public_key")
