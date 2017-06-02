@@ -411,12 +411,12 @@ def check_report_queue():
         yield from client.send_message(rep[0], rep[1])
     asyncio.ensure_future(check_report_queue())
 
-@asyncio_coroutine
+@asyncio.coroutine
 def check_server_memberships():
     global server_settings
     yield from asyncio.sleep(3600)
     active_servers = list([x.id for x in client.servers])
-    for(entry in server_settings):
+    for entry in server_settings:
         if entry.id not in active_servers:
             del server_settings[entry.id]
             print("Server "+entry.id + " removed from memory.")
