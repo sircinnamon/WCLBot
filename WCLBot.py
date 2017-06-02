@@ -52,6 +52,9 @@ def on_ready():
     print(client.user.name)
     print(client.user.id)
     print('------')
+    print("Current servers:")
+    for server in client.servers:
+        print(server.name + " ("+server.id+")")
     thread_list = startup_auto_report()
     asyncio.ensure_future(check_report_queue())
     asyncio.ensure_future(check_server_memberships())
