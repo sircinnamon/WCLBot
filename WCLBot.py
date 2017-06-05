@@ -107,6 +107,8 @@ def on_message(message):
         yield from toggle_auto_report_mode(message)
     elif(message.content.startswith("!wcheck") and verify_user_admin(message.author.id, message.server.id)):
         auto_report_trigger(message.server.id, refresh=False)
+    elif(message.content.startswith("!wtable") and verify_user_admin(message.author.id, message.server.id)):
+        yield from table_command(message)
     elif(message.content.startswith("!wtest") and verify_user_admin(message.author.id, message.server.id)):
         string = str(server_settings[message.server.id])
         yield from client.send_message(message.channel, "```"+string+"```")
@@ -432,6 +434,57 @@ def check_server_memberships():
 
 def report_url(reportID):
     return "https://www.warcraftlogs.com/reports/"+reportID+"/"
+
+def get_encounter(boss):
+    global current_key
+    searchkey = boss.lower().replace(" '-,.", "")
+    zones = pcl.wow_zones(key=current_key)
+    for zone in zones:
+        for encounter in zone.encounters:
+            if(searchkey in encounter.name.lower() or searchkey in encounter.name.lower().replace(" '-,.","")):
+                return encounter
+    return None
+
+def table_command(msg):
+    global current_key
+    global server_settings
+    args = msg.content[8:].split(" ")
+    view = None
+    report = "recent"
+    fight = "all"
+    length = 20
+    for arg in args:
+        if(arg.lower().startswith("view=")):
+            if(arg.lower() == "view=dps"):
+                view="damage-done"
+            elif(arg.lower() == "view=healer" or arg.lower() == "view=hps"):
+                view="healing"
+            elif(arg.lower() == "view=tank"):
+                view="damage-taken"
+            else:
+                view=arg.lower()[5:]
+        elif(arg.lower().startswith("report=")):
+            report=arg[7:]
+        elif(arg.lower().startswith("fight=")):
+            fight=arg[6:]
+        elif(arg.lower().startswith("length=")):
+            length=int(arg[7:])
+    if(report == "recent"):
+        report = most_recent_report(msg.server.id)
+    if(fight!="all"):
+        encounter=get_encounter(fight)
+        fight=encounter.id
+        bossname = encounter.name.upper()
+    else:
+        fight=None
+        bossname = "ALL"
+        
+    if(view is None):
+        yield from client.send_message(msg.channel, "Please provied a view (damage-done, damage-taken, healing).")
+    table = pcl.wow_report_tables(view, report.id, key=current_key, end=report.end-report.start,encounter=fight)
+    string = "*"+view.upper()+"* "+bossname+" - "+report.id+"\n" + table_string(table, length)
+    yield from client.send_message(msg.channel, "```"+string+"```")
+    return string
 
 
 os.environ['DISCORD_TOKEN'] = get_key("discord_bot_token")
