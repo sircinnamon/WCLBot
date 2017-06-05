@@ -105,6 +105,8 @@ def on_message(message):
         yield from toggle_auto_report(message)
     elif(message.content.startswith("!wlongmode") and verify_user_admin(message.author.id, message.server.id)):
         yield from toggle_auto_report_mode(message)
+    elif(message.content.startswith("!wcheck") and verify_user_admin(message.author.id, message.server.id)):
+        auto_report_trigger(message.server.id, refresh=False)
     elif(message.content.startswith("!wtest") and verify_user_admin(message.author.id, message.server.id)):
         string = str(server_settings[message.server.id])
         yield from client.send_message(message.channel, "```"+string+"```")
@@ -331,7 +333,7 @@ def toggle_auto_report_mode(msg):
     save_server_settings()
     yield from client.send_message(msg.channel, "Long Auto Report mode is now set to "+str(server_settings[msg.server.id].auto_report_mode_long)+".")
 
-def auto_report_trigger(serverID):
+def auto_report_trigger(serverID, refresh=True):
     print("Timer fired for server "+serverID, flush=True)
     global server_settings
     global current_key
@@ -366,17 +368,18 @@ def auto_report_trigger(serverID):
         #yield from client.send_message(serv_info.default_channel, "```"+string+"```")
         server = discord.utils.get(client.servers, id=serv_info.server_id)
         channel = discord.utils.get(server.channels, id=serv_info.default_channel)
-        report_queue.append((channel, "```"+string+"```"))
+        report_queue.append((channel, report_url(r.id)+"\n```"+string+"```"))
     if(len(reports) != 0):
         serv_info.update_recent_log(reports[len(reports)-1].start)
         server_settings[serverID] = serv_info
         save_server_settings()
     #trigger timer for next auto check
-    t = Timer(300, auto_report_trigger, args=(serverID,))
-    t.daemon = True
-    t.start()
-    thread_list.append(t)
-    #print("New Thread "+serverID, flush=True)
+    if(refresh):
+        t = Timer(300, auto_report_trigger, args=(serverID,))
+        t.daemon = True
+        t.start()
+        thread_list.append(t)
+        #print("New Thread "+serverID, flush=True)
 
 def startup_auto_report():
     global server_settings
@@ -426,6 +429,9 @@ def check_server_memberships():
             print("Server "+entry.id + " removed from memory.")
             save_server_settings()
     asyncio.ensure_future(check_server_memberships())
+
+def report_url(reportID):
+    return "https://www.warcraftlogs.com/reports/"+reportID+"/"
 
 
 os.environ['DISCORD_TOKEN'] = get_key("discord_bot_token")
