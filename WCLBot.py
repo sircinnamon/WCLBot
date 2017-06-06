@@ -89,9 +89,9 @@ def on_message(message):
         yield from toggle_auto_report_mode(message)
     elif(message.content.startswith("!wcheck") and verify_user_admin(message.author.id, message.server.id)):
         auto_report_trigger(message.server.id, refresh=False)
-    elif(message.content.startswith("!wtable") and verify_user_admin(message.author.id, message.server.id)):
+    elif(message.content.startswith("!wtable")):
         yield from table_command(message)
-    elif(message.content.startswith("!wchar") and verify_user_admin(message.author.id, message.server.id)):
+    elif(message.content.startswith("!wchar")):
         yield from char_command(message)
     elif(message.content.startswith("!wtest") and verify_user_admin(message.author.id, message.server.id)):
         string = str(server_settings[message.server.id])
