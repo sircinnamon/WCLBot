@@ -435,16 +435,6 @@ def check_server_memberships():
 def report_url(reportID):
     return "https://www.warcraftlogs.com/reports/"+reportID+"/"
 
-def get_encounter(boss):
-    global current_key
-    searchkey = boss.lower().replace(" '-,.", "")
-    zones = pcl.wow_zones(key=current_key)
-    for zone in zones:
-        for encounter in zone.encounters:
-            if(searchkey in encounter.name.lower() or searchkey in encounter.name.lower().replace(" '-,.","")):
-                return encounter
-    return None
-
 def table_command(msg):
     global current_key
     global server_settings
@@ -453,6 +443,8 @@ def table_command(msg):
     report = "recent"
     fight = "all"
     length = 20
+    starttime = 0
+    endtime = 0
     for arg in args:
         if(arg.lower().startswith("view=")):
             if(arg.lower() == "view=dps"):
@@ -471,17 +463,39 @@ def table_command(msg):
             length=int(arg[7:])
     if(report == "recent"):
         report = most_recent_report(msg.server.id)
-    if(fight!="all"):
-        encounter=get_encounter(fight)
-        fight=encounter.id
-        bossname = encounter.name.upper()
     else:
-        fight=None
+        report = pcl.wow_get_report(report, key=current_key)
+    endtime=report.end-report.start
+    if(fight!="all"):
+        fightlist=pcl.generate_fight_list(report.id, key=current_key)
+        if(fight.isdigit()):
+            #Assume its a fight id
+            for f in fightlist:
+                if(f.id == int(fight)):
+                    starttime = f.start_time
+                    endtime = f.end_time
+                    bossname = f.name.upper()
+        else:
+            #Assume its a bossname and get kill or latest attempt
+            searchkey = fight.lower().replace(" '-,.", "")
+            fightlist.reverse()
+            for f in fightlist:
+                if(f.kill and (searchkey in f.name.lower() or searchkey in f.name.lower().replace(" '-,.",""))):
+                    starttime = f.start_time
+                    endtime = f.end_time
+                    bossname = f.name.upper()
+            for f in fightlist:
+                if(searchkey in f.name.lower() or searchkey in f.name.lower().replace(" '-,.","")):
+                    starttime = f.start_time
+                    endtime = f.end_time
+                    bossname = f.name.upper()
+                    break
+    else:
         bossname = "ALL"
-        
+
     if(view is None):
         yield from client.send_message(msg.channel, "Please provied a view (damage-done, damage-taken, healing).")
-    table = pcl.wow_report_tables(view, report.id, key=current_key, end=report.end-report.start,encounter=fight)
+    table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime)
     string = "*"+view.upper()+"* "+bossname+" - "+report.id+"\n" + table_string(table, length)
     yield from client.send_message(msg.channel, "```"+string+"```")
     return string
