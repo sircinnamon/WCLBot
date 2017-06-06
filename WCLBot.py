@@ -21,27 +21,9 @@ server_settings = dict()
 thread_list = list()
 report_queue = deque()
 
-serv_not_registered_msg = ("Whoops! This server is not yet registered. Please "
-                          + "have your server admin use the !winitialize command "
-                          + "(!whelp for more info)!"
-                          )
-help_msg = ("Hello! I'm Weasel the WarcraftLogs API Discord bot! I can be "
-           + "used to view logs at a glance, track attendance, brag about "
-           + "parses and more! For help with setup, type '!wsetup'. For a "
-           + "full command list, type '!wcommands'. I was created by "
-           + "sircinnamon@gmail.com."
-           )
-setup_help_msg = ("If you are an admin, start by typing '!winitialize' to "
-                 + "add your server to the registry. This will allow you "
-                 + "to use the bot. To set up automatic log tracking, "
-                 + "first type '!wguild <guildname> <realm>-<region>'."
-                 + "To enable automatic log reporting, type '!wautolog'."
-                 + "To enable long form reporting, type '!wlonglog'."
-                 + "To change the channel the bot posts in, type '!wchannel' "
-                 + "in a channel the bot can view. To allow others to change "
-                 + "these settings, type '!wadmin' followed by an @ to all the " 
-                 + "desired users."
-                 )
+serv_not_registered_msg = ("""```Whoops! This server is not yet registered. Please have your server admin use the !winitialize command (!whelp for more info)!```""")
+help_msg = ("""```Hello! I'm Weasel the WarcraftLogs API Discord bot! I can be used to view logs at a glance, track attendance, brag about parses and more! For help with setup, type '!wsetup'. For a full command list, type '!wcommands'. I was created by sircinnamon@gmail.com.```""")
+setup_help_msg = ("""```If you are an admin, start by typing '!winitialize' to add your server to the registry. This will allow you to use the bot. To set up automatic log tracking, first type '!wguild <guildname> <realm>-<region>'. To enable automatic log reporting, type '!wautolog'. To enable long form reporting, type '!wlonglog'. To change the channel the bot posts in, type '!wchannel' in a channel the bot can view. To allow others to change these settings, type '!wadmin' followed by an @ to all the desired users.```""")
 command_list_msg = ("Command list to be added.")
 @client.event
 @asyncio.coroutine
@@ -483,11 +465,11 @@ def table_command(msg):
                     bossname = f.name.upper()
         else:
             #Assume its a bossname and get kill or latest attempt
-            searchkey = fight.lower().replace(" '-,.", "")
+            searchkey = searchable(fight.lower())
             fightlist.reverse()
             found = False
             for f in fightlist:
-                if(f.kill and (searchkey in f.name.lower() or searchkey in f.name.lower().replace(" '-,.",""))):
+                if(f.kill and (searchkey in f.name.lower() or searchkey in searchable(f.name.lower()))):
                     starttime = f.start_time
                     endtime = f.end_time
                     bossname = f.name.upper()
@@ -495,7 +477,7 @@ def table_command(msg):
                     break
             if(not found):
                 for f in fightlist:
-                    if(searchkey in f.name.lower() or searchkey in f.name.lower().replace(" '-,.","")):
+                    if(searchkey in f.name.lower() or searchkey in searchable(f.name.lower())):
                         starttime = f.start_time
                         endtime = f.end_time
                         bossname = f.name.upper()
@@ -548,6 +530,7 @@ def char_command(msg):
         report = pcl.wow_get_report(report, key=current_key)
     endtime=report.end-report.start
     if(fight!="all"):
+        bossname = "err" 
         fightlist=pcl.generate_fight_list(report.id, key=current_key)
         if(fight.isdigit()):
             #Assume its a fight id
@@ -558,11 +541,12 @@ def char_command(msg):
                     bossname = f.name.upper()
         else:
             #Assume its a bossname and get kill or latest attempt
-            searchkey = fight.lower().replace(" '-,.", "")
+            searchkey = searchable(fight.lower())
             fightlist.reverse()
             found = False
             for f in fightlist:
-                if(f.kill and (searchkey in f.name.lower() or searchkey in f.name.lower().replace(" '-,.",""))):
+                print(searchable(f.name.lower()))
+                if(f.kill and (searchkey in f.name.lower() or searchkey in searchable(f.name.lower()))):
                     starttime = f.start_time
                     endtime = f.end_time
                     bossname = f.name.upper()
@@ -570,7 +554,7 @@ def char_command(msg):
                     break
             if(not found):
                 for f in fightlist:
-                    if(searchkey in f.name.lower() or searchkey in f.name.lower().replace(" '-,.","")):
+                    if(searchkey in f.name.lower() or searchkey in searchable(f.name.lower())):
                         starttime = f.start_time
                         endtime = f.end_time
                         bossname = f.name.upper()
@@ -592,6 +576,12 @@ def char_command(msg):
         table = char_table_entry.abilities
     string = "*"+charname.upper()+" "+view.upper()+"* "+bossname+" - "+report.id+"\n" + table_string(table, length)
     yield from client.send_message(msg.channel, "```"+string+"```")
+    return string
+
+def searchable(string):
+    for char in string:
+        if char not in " abcdefghijklmnopqrstuvwxyz":
+            string = string.replace(char, "")
     return string
 
 
