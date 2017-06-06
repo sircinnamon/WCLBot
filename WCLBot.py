@@ -109,6 +109,8 @@ def on_message(message):
         auto_report_trigger(message.server.id, refresh=False)
     elif(message.content.startswith("!wtable") and verify_user_admin(message.author.id, message.server.id)):
         yield from table_command(message)
+    elif(message.content.startswith("!wchar") and verify_user_admin(message.author.id, message.server.id)):
+        yield from char_command(message)
     elif(message.content.startswith("!wtest") and verify_user_admin(message.author.id, message.server.id)):
         string = str(server_settings[message.server.id])
         yield from client.send_message(message.channel, "```"+string+"```")
@@ -236,8 +238,9 @@ def report_summary_string_long(report):
     string += topdmg_string + topheal_string
     return string
 
-def table_string(table, length):
+def table_string(table, length, name_width=18):
     #Takes a table with a total (healing, damage-done, damage-taken, casts and summons)
+    #Works for any set of entries with a total and a name
     string = ""
     table.sort(key=lambda x: x.total)
     table.reverse()
@@ -245,13 +248,16 @@ def table_string(table, length):
     for entry in table:
         total += entry.total
     for i in range(0,min(length,len(table))):
-        string += table_string_row(table[i], total)+"\n"
+        string += table_string_row(table[i], total, name_width)+"\n"
     return string
 
 
-def table_string_row(table_entry, total):
-    format_str = "{0.name:<13}".format(table_entry)
-    format_str += "{0:>12} ".format(abbreviate_num(table_entry.total))
+def table_string_row(table_entry, total, width=18):
+    name = table_entry.name
+    if(len(name)>width-3):
+        name = name[:width-3]+"..."
+    format_str = "{0:<{width}}".format(name, width=width)
+    format_str += "{0:>8} ".format(abbreviate_num(table_entry.total))
     format_str += "{:.2%} ".format(table_entry.total/total)
     return format_str
 
@@ -479,17 +485,21 @@ def table_command(msg):
             #Assume its a bossname and get kill or latest attempt
             searchkey = fight.lower().replace(" '-,.", "")
             fightlist.reverse()
+            found = False
             for f in fightlist:
                 if(f.kill and (searchkey in f.name.lower() or searchkey in f.name.lower().replace(" '-,.",""))):
                     starttime = f.start_time
                     endtime = f.end_time
                     bossname = f.name.upper()
-            for f in fightlist:
-                if(searchkey in f.name.lower() or searchkey in f.name.lower().replace(" '-,.","")):
-                    starttime = f.start_time
-                    endtime = f.end_time
-                    bossname = f.name.upper()
+                    found = True
                     break
+            if(not found):
+                for f in fightlist:
+                    if(searchkey in f.name.lower() or searchkey in f.name.lower().replace(" '-,.","")):
+                        starttime = f.start_time
+                        endtime = f.end_time
+                        bossname = f.name.upper()
+                        break
     else:
         bossname = "ALL"
 
@@ -497,6 +507,90 @@ def table_command(msg):
         yield from client.send_message(msg.channel, "Please provied a view (damage-done, damage-taken, healing).")
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime)
     string = "*"+view.upper()+"* "+bossname+" - "+report.id+"\n" + table_string(table, length)
+    yield from client.send_message(msg.channel, "```"+string+"```")
+    return string
+
+def char_command(msg):
+    global current_key
+    global server_settings
+    args = msg.content[7:].split(" ")
+    view = None
+    charname = None
+    report = "recent"
+    fight = "all"
+    length = 20
+    starttime = 0
+    endtime = 0
+    target_mode = False
+    for arg in args:
+        if(arg.lower().startswith("view=")):
+            if(arg.lower() == "view=dps"):
+                view="damage-done"
+            elif(arg.lower() == "view=healer" or arg.lower() == "view=hps"):
+                view="healing"
+            elif(arg.lower() == "view=tank"):
+                view="damage-taken"
+            else:
+                view=arg.lower()[5:]
+        elif(arg.lower().startswith("report=")):
+            report=arg[7:]
+        elif(arg.lower().startswith("fight=")):
+            fight=arg[6:]
+        elif(arg.lower().startswith("length=")):
+            length=int(arg[7:])
+        elif(arg.lower().startswith("char=")):
+            charname=arg[5:].lower()
+        elif(arg == "-t"):
+            target_mode = True
+    if(report == "recent"):
+        report = most_recent_report(msg.server.id)
+    else:
+        report = pcl.wow_get_report(report, key=current_key)
+    endtime=report.end-report.start
+    if(fight!="all"):
+        fightlist=pcl.generate_fight_list(report.id, key=current_key)
+        if(fight.isdigit()):
+            #Assume its a fight id
+            for f in fightlist:
+                if(f.id == int(fight)):
+                    starttime = f.start_time
+                    endtime = f.end_time
+                    bossname = f.name.upper()
+        else:
+            #Assume its a bossname and get kill or latest attempt
+            searchkey = fight.lower().replace(" '-,.", "")
+            fightlist.reverse()
+            found = False
+            for f in fightlist:
+                if(f.kill and (searchkey in f.name.lower() or searchkey in f.name.lower().replace(" '-,.",""))):
+                    starttime = f.start_time
+                    endtime = f.end_time
+                    bossname = f.name.upper()
+                    found = True
+                    break
+            if(not found):
+                for f in fightlist:
+                    if(searchkey in f.name.lower() or searchkey in f.name.lower().replace(" '-,.","")):
+                        starttime = f.start_time
+                        endtime = f.end_time
+                        bossname = f.name.upper()
+                        break
+    else:
+        bossname = "ALL"
+
+    if(view is None):
+        yield from client.send_message(msg.channel, "Please provied a view (damage-done, damage-taken, healing).")
+    table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime)
+    for entry in table:
+        if(charname in entry.name.lower()):
+            charname = entry.name.lower()
+            char_table_entry = entry
+            break
+    if(target_mode):
+        table = char_table_entry.targets
+    else:
+        table = char_table_entry.abilities
+    string = "*"+charname.upper()+" "+view.upper()+"* "+bossname+" - "+report.id+"\n" + table_string(table, length)
     yield from client.send_message(msg.channel, "```"+string+"```")
     return string
 
