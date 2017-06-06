@@ -220,15 +220,15 @@ def report_summary_string_long(report):
     string += topdmg_string + topheal_string
     return string
 
-def table_string(table, length, name_width=18):
+def table_string(table, length, name_width=18, total=0):
     #Takes a table with a total (healing, damage-done, damage-taken, casts and summons)
     #Works for any set of entries with a total and a name
     string = ""
     table.sort(key=lambda x: x.total)
     table.reverse()
-    total = 0
-    for entry in table:
-        total += entry.total
+    if(total==0):
+        for entry in table:
+            total += entry.total
     for i in range(0,min(length,len(table))):
         string += table_string_row(table[i], total, name_width)+"\n"
     return string
@@ -565,16 +565,18 @@ def char_command(msg):
     if(view is None):
         yield from client.send_message(msg.channel, "Please provied a view (damage-done, damage-taken, healing).")
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime)
+   
     for entry in table:
         if(charname in entry.name.lower()):
             charname = entry.name.lower()
             char_table_entry = entry
             break
+
     if(target_mode):
         table = char_table_entry.targets
     else:
         table = char_table_entry.abilities
-    string = "*"+charname.upper()+" "+view.upper()+"* "+bossname+" - "+report.id+"\n" + table_string(table, length)
+    string = "*"+charname.upper()+" "+view.upper()+"* "+bossname+" - "+report.id+"\n" + table_string(table, length, total=char_table_entry.total)
     yield from client.send_message(msg.channel, "```"+string+"```")
     return string
 
