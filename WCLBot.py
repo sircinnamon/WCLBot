@@ -113,7 +113,6 @@ def initialize_new_server(msg):
         return False
     else:
         new_server_info = ServerInfo(msg.server.id)
-        print(msg.author.id)
         new_server_info.add_admin(msg.author.id)
         new_server_info.set_default_channel(msg.server.default_channel)
         server_settings[msg.server.id] = new_server_info
@@ -240,7 +239,7 @@ def table_string_row(table_entry, total, width=18):
         name = name[:width-3]+"..."
     format_str = "{0:<{width}}".format(name, width=width)
     format_str += "{0:>8} ".format(abbreviate_num(table_entry.total))
-    format_str += "{:.2%} ".format(table_entry.total/total)
+    format_str += "{:.2%} ".format(table_entry.total/total if total!= 0 else 0)
     return format_str
 
 def abbreviate_num(num):
@@ -272,7 +271,6 @@ def fight_list_string_long(fightlist):
     string = ""
     for fight in fightlist:
         if(fight.boss != 0):
-            print(str(fight.id) + " " + fight.name + " " + str(fight.boss) + str(fight.kill))
             difficulty = get_difficulty(fight.difficulty)[0]
             string += "{0:>3}: {1} {2:<25} - ".format(fight.id, difficulty, fight.name)
             if(fight.kill == False):
@@ -500,7 +498,7 @@ def char_command(msg):
     charname = None
     report = "recent"
     fight = "all"
-    length = 20
+    length = 10
     starttime = 0
     endtime = 0
     target_mode = False
@@ -529,9 +527,19 @@ def char_command(msg):
     else:
         report = pcl.wow_get_report(report, key=current_key)
     endtime=report.end-report.start
+    fightlist=pcl.generate_fight_list(report.id, key=current_key)
+    attendance_list=get_full_attendance(fightlist)
+
+    char=attendance_list[0]
+    for player in attendance_list:
+        if(charname in player.name.lower()):
+            char = player
+            break
+    charname = player.name.lower()
+
+
     if(fight!="all"):
         bossname = "err" 
-        fightlist=pcl.generate_fight_list(report.id, key=current_key)
         if(fight.isdigit()):
             #Assume its a fight id
             for f in fightlist:
@@ -540,13 +548,18 @@ def char_command(msg):
                     endtime = f.end_time
                     bossname = f.name.upper()
         else:
-            #Assume its a bossname and get kill or latest attempt
+            #Assume its a bossname and get kill or latest attempt from chars attended fights
+            attended_fights = list()
+            for f in fightlist:
+                if(char.attended(f.id)):
+                    attended_fights.append(f)
+            fightlist = attended_fights
+
             searchkey = searchable(fight.lower())
             fightlist.reverse()
             found = False
             for f in fightlist:
-                print(searchable(f.name.lower()))
-                if(f.kill and (searchkey in f.name.lower() or searchkey in searchable(f.name.lower()))):
+                if(f.boss!=0 and f.kill and (searchkey in f.name.lower() or searchkey in searchable(f.name.lower()))):
                     starttime = f.start_time
                     endtime = f.end_time
                     bossname = f.name.upper()
@@ -564,19 +577,12 @@ def char_command(msg):
 
     if(view is None):
         yield from client.send_message(msg.channel, "Please provied a view (damage-done, damage-taken, healing).")
-    table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime)
-   
+    table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime, sourceid=char.id)
+    total = 0
     for entry in table:
-        if(charname in entry.name.lower()):
-            charname = entry.name.lower()
-            char_table_entry = entry
-            break
+        total += entry.total
 
-    if(target_mode):
-        table = char_table_entry.targets
-    else:
-        table = char_table_entry.abilities
-    string = "*"+charname.upper()+" "+view.upper()+"* "+bossname+" - "+report.id+"\n" + table_string(table, length, total=char_table_entry.total)
+    string = "*"+charname.upper()+" "+view.upper()+"* "+bossname+" - "+report.id+"\n" + table_string(table, length, total=total)
     yield from client.send_message(msg.channel, "```"+string+"```")
     return string
 
@@ -585,6 +591,14 @@ def searchable(string):
         if char not in " abcdefghijklmnopqrstuvwxyz":
             string = string.replace(char, "")
     return string
+
+def get_full_attendance(fightlist):
+    players = {}
+    for fight in fightlist:
+        for player in fight.friendlies:
+            if((player.id not in players) and (player.type != "NPC" and (player.type != "Unknown"))):
+                players[player.id] = player
+    return list(players.values())
 
 
 os.environ['DISCORD_TOKEN'] = get_key("discord_bot_token")
