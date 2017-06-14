@@ -7,6 +7,7 @@ import pickle
 import pycraftlogs as pcl
 from threading import Timer, Thread
 from collections import deque
+from urllib.request import HTTPError
 
 from ServerInfo import ServerInfo
 
@@ -345,22 +346,28 @@ def auto_report_trigger(serverID, refresh=True):
                                                  serv_info.guild_region, 
                                                  start=serv_info.most_recent_log_start+1,
                                                  key=current_key)
+        for r in reports:
+            if(serv_info.auto_report_mode_long):
+                string = report_summary_string_long(r)
+            else:
+                string = report_summary_string(r)
+            #print(string, flush=True)
+            #yield from client.send_message(serv_info.default_channel, "```"+string+"```")
+            server = discord.utils.get(client.servers, id=serv_info.server_id)
+            channel = discord.utils.get(server.channels, id=serv_info.default_channel)
+            report_queue.append((channel, report_url(r.id)+"\n```"+string+"```"))
+        if(len(reports) != 0):
+            serv_info.update_recent_log(reports[len(reports)-1].start)
+            server_settings[serverID] = serv_info
+            save_server_settings()
     except HTTPError:
         print("HTTP Error: "+str(HTTPError))
-    for r in reports:
-        if(serv_info.auto_report_mode_long):
-            string = report_summary_string_long(r)
-        else:
-            string = report_summary_string(r)
-        #print(string, flush=True)
-        #yield from client.send_message(serv_info.default_channel, "```"+string+"```")
-        server = discord.utils.get(client.servers, id=serv_info.server_id)
-        channel = discord.utils.get(server.channels, id=serv_info.default_channel)
-        report_queue.append((channel, report_url(r.id)+"\n```"+string+"```"))
-    if(len(reports) != 0):
-        serv_info.update_recent_log(reports[len(reports)-1].start)
-        server_settings[serverID] = serv_info
-        save_server_settings()
+    except KeyError:
+        print("Key Error: "+str(KeyError))
+    except ValueError:
+        print("Val Error: "+str(ValueError))
+    except:
+        print("Unexpected error")
     #trigger timer for next auto check
     if(refresh):
         t = Timer(300, auto_report_trigger, args=(serverID,))
