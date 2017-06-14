@@ -202,7 +202,8 @@ def get_key(key_name):
     return None
 
 def report_summary_string(report):
-    date = datetime.datetime.fromtimestamp(report.start/1000).strftime('%Y-%m-%d')
+    #Convert to Eastern Standard for date (sub 18000 secs)
+    date = datetime.datetime.fromtimestamp((report.start/1000)-18000).strftime('%Y-%m-%d')
     string = (report.title + ". Uploaded by " + report.owner + ". - " 
               + str(report.id) + " (" + date + ")\n")
     return string
