@@ -243,7 +243,7 @@ def table_string_row(table_entry, total, width=18):
     return format_str
 
 def abbreviate_num(num):
-    for unit in ['K','M','B','T','Q']:
+    for unit in ['','K','M','B','T','Q']:
         if(abs(num)<1000):
             return "{0:3.2f}{1:s}".format(num, unit)
         num /= 1000
