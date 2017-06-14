@@ -358,7 +358,7 @@ def auto_report_trigger(serverID, refresh=True):
             channel = discord.utils.get(server.channels, id=serv_info.default_channel)
             report_queue.append((channel, report_url(r.id)+"\n```"+string+"```"))
         if(len(reports) != 0):
-            serv_info.update_recent_log(reports[len(reports)-1].start)
+            serv_info.update_recent_log(reports[len(reports)-1].start,reports[len(reports)-1].end)
             server_settings[serverID] = serv_info
             save_server_settings()
     except HTTPError:
@@ -407,11 +407,13 @@ def send_msg(channel, msg):
 @asyncio.coroutine
 def check_report_queue():
     global report_queue
+    global server_settings
     while(len(report_queue)==0):
         yield from asyncio.sleep(15)
     while(len(report_queue)>0):
         rep = report_queue.popleft()
-        yield from client.send_message(rep[0], rep[1])
+        message = yield from client.send_message(rep[0], rep[1])
+        server_settings[message.server.id].most_recent_log_summary = message.id
     asyncio.ensure_future(check_report_queue())
 
 @asyncio.coroutine
