@@ -97,9 +97,12 @@ def on_message(message):
     elif(message.content.startswith("!wtest") and verify_user_admin(message.author.id, message.server.id)):
         string = str(server_settings[message.server.id])
         yield from client.send_message(message.channel, "```"+string+"```")
+    elif(message.content.startswith("!wcheat2") and verify_user_admin(message.author.id, message.server.id)):
+        num = int(message.content.split()[1])
+        __test(2, message, num)
     elif(message.content.startswith("!wcheat") and verify_user_admin(message.author.id, message.server.id)):
         num = int(message.content.split()[1])
-        __test(message, num)
+        __test(1, message, num)
 
 @client.event
 @asyncio.coroutine
@@ -339,26 +342,40 @@ def auto_report_trigger(serverID, refresh=True):
     elif(serv_info.most_recent_log_start == 0):
         #If it's never been run, dont report old logs
         serv_info.most_recent_log_start = most_recent_report(serverID).start
-    #Check for reports newer than the newest known by auto
+    #Check for reports after and including the newest known
+    #if newest known has a later end time, check it again and update report
+    #if newer reports exist, summarize them and send
     reports = list()
     try:
         reports = pcl.generate_guild_report_list(serv_info.guild_name, 
                                                  serv_info.guild_realm, 
                                                  serv_info.guild_region, 
-                                                 start=serv_info.most_recent_log_start+1,
+                                                 start=serv_info.most_recent_log_start,
                                                  key=current_key)
-        for r in reports:
+        if(len(reports)>0 and reports[0].end > serv_info.most_recent_log_end):
+            if(serv_info.most_recent_log_end == 0):
+                #just set it and forget it
+                serv_info.most_recent_log_end = reports[0].end
+            else:
+                #need to update and edit report summary
+                if(serv_info.auto_report_mode_long):
+                    string = report_summary_string_long(reports[0])
+                else:
+                    string = report_summary_string(reports[0])
+                server = discord.utils.get(client.servers, id=serv_info.server_id)
+                channel = discord.utils.get(server.channels, id=serv_info.default_channel)
+                messageID = server_settings[serverID].most_recent_log_summary
+                report_queue.append((channel, report_url(reports[0].id)+"\n```"+string+"```", messageID)) #edit message messageID to be this info now
+        for r in reports[1:]:
             if(serv_info.auto_report_mode_long):
                 string = report_summary_string_long(r)
             else:
                 string = report_summary_string(r)
-            #print(string, flush=True)
-            #yield from client.send_message(serv_info.default_channel, "```"+string+"```")
             server = discord.utils.get(client.servers, id=serv_info.server_id)
             channel = discord.utils.get(server.channels, id=serv_info.default_channel)
-            report_queue.append((channel, report_url(r.id)+"\n```"+string+"```"))
-        if(len(reports) != 0):
-            serv_info.update_recent_log(reports[len(reports)-1].start)
+            report_queue.append((channel, report_url(r.id)+"\n```"+string+"```", 0)) #0 for message id to edit - ie there is none
+        if(len(reports) <= 1):
+            serv_info.update_recent_log(reports[len(reports)-1].start,reports[len(reports)-1].end)
             server_settings[serverID] = serv_info
             save_server_settings()
     except HTTPError:
@@ -367,8 +384,11 @@ def auto_report_trigger(serverID, refresh=True):
         print("Key Error: "+str(KeyError))
     except ValueError:
         print("Val Error: "+str(ValueError))
-    except:
+    except Exception as ex:
         print("Unexpected error")
+        print(type(ex))
+        print(ex.args)
+        print(str(ex))
     #trigger timer for next auto check
     if(refresh):
         t = Timer(300, auto_report_trigger, args=(serverID,))
@@ -391,14 +411,17 @@ def startup_auto_report():
             timers.append(t)
     return timers
 
-def __test(msg, num):
+def __test(code, msg, num):
     global server_settings
     global thread_list
     # print("Threads:")
     # for thread in thread_list:
     #     print(thread.name)
     #     print(str(thread.is_alive()))
-    server_settings[msg.server.id].most_recent_log_start = num
+    if(code == 1):
+        server_settings[msg.server.id].most_recent_log_start = num
+    elif(code == 2):
+        server_settings[msg.server.id].most_recent_log_end = num
 
 @asyncio.coroutine
 def send_msg(channel, msg):
@@ -407,11 +430,17 @@ def send_msg(channel, msg):
 @asyncio.coroutine
 def check_report_queue():
     global report_queue
+    global server_settings
     while(len(report_queue)==0):
         yield from asyncio.sleep(15)
     while(len(report_queue)>0):
         rep = report_queue.popleft()
-        yield from client.send_message(rep[0], rep[1])
+        if(rep[2]==0):
+            message = yield from client.send_message(rep[0], rep[1])
+        else:
+            message = yield from client.get_message(rep[0],rep[2])
+            message = yield from client.edit_message(message, rep[1])
+        server_settings[message.server.id].most_recent_log_summary = message.id
     asyncio.ensure_future(check_report_queue())
 
 @asyncio.coroutine

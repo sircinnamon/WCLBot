@@ -10,8 +10,6 @@ class ServerInfo(object):
         this.default_channel = None
         this.auto_report_mode_long = False
         this.most_recent_log_start = 0
-        this.most_recent_log_end = 0
-        this.most_recent_log_summary = 0 #the messageID (within default channel) to edit if need be
 
     def update_guild(self, name, realm, region):
         self.guild_name = name
@@ -34,16 +32,11 @@ class ServerInfo(object):
 
     def set_default_channel(self, channelID):
         self.default_channel = channelID
-        this.most_recent_log_summary = 0
 
-    def update_recent_log(self, start, end):
-        if(self.most_recent_log_start > start):
+    def update_recent_log(self, timestamp):
+        if(self.most_recent_log_start > timestamp):
             print("Updating log time for "+this.server_id +", but something has gone wrong.")
-        self.most_recent_log_start = start
-        self.most_recent_log_end = end
-
-    def update_log_summary(self, messageID):
-        self.most_recent_log_summary = messageID
+        self.most_recent_log_start = timestamp
 
     def __str__(self):
         string = ("server_id="+self.server_id+"\n"
@@ -54,7 +47,5 @@ class ServerInfo(object):
                + "auto_report="+str(self.auto_report)+"\n"
                + "default_channel="+self.default_channel+"\n"
                + "auto_report_mode_long="+str(self.auto_report_mode_long)+"\n"
-               + "most_recent_log_start="+str(self.most_recent_log_start)+"\n"
-               + "most_recent_log_end="+str(self.most_recent_log_end)+"\n"
-               + "most_recent_log_summary="+str(self.most_recent_log_summary)+"\n")
+               + "most_recent_log_start="+str(self.most_recent_log_start)+"\n")
         return string
