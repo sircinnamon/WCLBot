@@ -374,7 +374,7 @@ def auto_report_trigger(serverID, refresh=True):
             server = discord.utils.get(client.servers, id=serv_info.server_id)
             channel = discord.utils.get(server.channels, id=serv_info.default_channel)
             report_queue.append((channel, report_url(r.id)+"\n```"+string+"```", 0)) #0 for message id to edit - ie there is none
-        if(len(reports) <= 1):
+        if(len(reports) >= 1):
             serv_info.update_recent_log(reports[len(reports)-1].start,reports[len(reports)-1].end)
             server_settings[serverID] = serv_info
             save_server_settings()
@@ -436,10 +436,16 @@ def check_report_queue():
     while(len(report_queue)>0):
         rep = report_queue.popleft()
         if(rep[2]==0):
-            message = yield from client.send_message(rep[0], rep[1])
+            messageID = yield from client.send_message(rep[0], rep[1])
         else:
-            message = yield from client.get_message(rep[0],rep[2])
-            message = yield from client.edit_message(message, rep[1])
+            try:
+                message = yield from client.get_message(rep[0],rep[2])
+            except discord.NotFound:
+                message = None
+            if(message is None):
+                message = yield from client.send_message(rep[0], rep[1])
+            else:
+                message = yield from client.edit_message(message, rep[1])
         server_settings[message.server.id].most_recent_log_summary = message.id
     asyncio.ensure_future(check_report_queue())
 
