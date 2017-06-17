@@ -49,17 +49,29 @@ def on_message(message):
     global enabled
     global current_key
 
-    print(message.server.name+"/"+message.channel.name+" "+message.author.name+":")
+
+    if(message.server is not None): print(message.server.name+"/"+message.channel.name+" "+message.author.name+":")
+    elif(message.channel.is_private and message.channel.type is discord.ChannelType.group): print("PRIVATE/"+message.channel.name+" "+message.author.name+":")
+    elif(message.channel.is_private): print("PRIVATE - "+message.author.name+":")
     print(message.content)
 
-    if(message.content.startswith("!winitialize")):
+    if(message.author == client.user):
+        #Ignore own messages
+        pass
+    elif(message.content.startswith("!winitialize") and message.server is not None):
         yield from initialize_new_server(message)
     elif(message.content.startswith("!whelp")):
         yield from client.send_message(message.channel, help_msg)
     elif(message.content.startswith("!wsetup")):
         yield from client.send_message(message.channel, setup_help_msg)
     elif(message.content.startswith("!wcommands")):
-        yield from client.send_message(message.channel, command_list_msg)
+        if(message.channel.is_private):
+            yield from client.send_message(message.channel, command_list_msg)
+        else:
+            yield from client.send_message(message.author, command_list_msg)
+    elif(message.server is None):
+        warning = "\n`Sorry, only help messages can be whispered. Other private messages are not supported. Try !wcommands.`"
+        yield from client.send_message(message.channel, shuffle_case(message.clean_content)+" "+warning)
     elif(message.content.startswith("!w") and not verify_server_registered(message.server.id)):
         yield from client.send_message(message.channel, serv_not_registered_msg)
     elif(message.content.startswith("!wguild ") and verify_user_admin(message.author.id, message.server.id)):
@@ -642,6 +654,17 @@ def get_full_attendance(fightlist):
             if((player.id not in players) and (player.type != "NPC" and (player.type != "Unknown"))):
                 players[player.id] = player
     return list(players.values())
+
+def shuffle_case(string):
+    upper_string = string.upper()
+    lower_string = string.lower()
+    new_string = ""
+    odd = False
+    for upp,low in zip(upper_string,lower_string):
+        if(odd): new_string = new_string+upp
+        else: new_string = new_string+low
+        odd = not odd
+    return new_string
 
 
 os.environ['DISCORD_TOKEN'] = get_key("discord_bot_token")
