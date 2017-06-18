@@ -25,7 +25,22 @@ report_queue = deque()
 serv_not_registered_msg = ("""```Whoops! This server is not yet registered. Please have your server admin use the !winitialize command (!whelp for more info)!```""")
 help_msg = ("""```Hello! I'm Weasel the WarcraftLogs API Discord bot! I can be used to view logs at a glance, track attendance, brag about parses and more! For help with setup, type '!wsetup'. For a full command list, type '!wcommands'. I was created by sircinnamon@gmail.com.```""")
 setup_help_msg = ("""```If you are an admin, start by typing '!winitialize' to add your server to the registry. This will allow you to use the bot. To set up automatic log tracking, first type '!wguild <guildname> <realm>-<region>'. To enable automatic log reporting, type '!wautolog'. To enable long form reporting, type '!wlonglog'. To change the channel the bot posts in, type '!wchannel' in a channel the bot can view. To allow others to change these settings, type '!wadmin' followed by an @ to all the desired users.```""")
-command_list_msg = ("Command list to be added.")
+command_list_msg = ("""```Here are the available commands. Some arguments must be described with <argname>=<arg>. These are often optional.
+!winitialize - Add a server to the register to allow bot use.
+!whelp - Show help message.
+!wsetup - Show setup instructions.
+!wadmin - Give users permissions to edit serverwide bot settings. Format: "!wadmin @user"
+!wguild - Set the guild to default to on a server. Format: "!wguild Guild Name Server-Region"
+!wchannel - Set the default channel for auto messages. Simply say command in desired channel.
+!wauto - Toggle auto reporting on/off.
+!wlongmode - Toggle between short and long report summaries.
+!wreport - Summarize a particular report. Defaults to most recent. Format "!wreport ReportCode"
+!wfights - List boss pulls in a rpeort. Defaults to most recent. Format "!wfights ReportCode"
+!wtable - Show a table of a particular view. View is required. Fight defaults to all, length defaults to 20.
+          Format: "!wtable view=[Healing/dps/Tank] fight=[all/fightname/fightid] length=[20/num] report=[recent/code]"
+!wchar - Show a table of a particular view for a particular character. Char is required, other args same as wtable.
+          Format: "!wchar char=[charname] view=[Healing/dps/Tank] fight=[all/fightname/fightid] length=[20/num] report=[recent/code]"
+```""")
 @client.event
 @asyncio.coroutine
 def on_ready():
