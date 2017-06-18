@@ -522,7 +522,9 @@ def table_command(msg):
             fightlist.reverse()
             found = False
             for f in fightlist:
-                if(f.kill and (searchkey in f.name.lower() or searchkey in searchable(f.name.lower()))):
+                if(isinstance(f, pcl.TrashFight)):
+                    pass
+                elif(f.kill and (searchkey in f.name.lower() or searchkey in searchable(f.name.lower()))):
                     starttime = f.start_time
                     endtime = f.end_time
                     bossname = f.name.upper()
