@@ -463,7 +463,7 @@ def check_report_queue():
     while(len(report_queue)>0):
         rep = report_queue.popleft()
         if(rep[2]==0):
-            messageID = yield from client.send_message(rep[0], rep[1])
+            message = yield from client.send_message(rep[0], rep[1])
         else:
             try:
                 message = yield from client.get_message(rep[0],rep[2])
