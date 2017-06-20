@@ -312,9 +312,10 @@ def fight_list_string_long(fightlist):
             string+="\n"
     return string
 
-def get_difficulty(int):
+def get_difficulty(num):
     difficulties = ["","","LFR","Normal","Heroic","Mythic"]
-    return difficulties[int]
+    if(num > len(difficulties)-1):return "?"
+    return difficulties[num]
 
 def get_report(reportID):
     global current_key
@@ -416,6 +417,7 @@ def auto_report_trigger(serverID, refresh=True):
         print(type(ex))
         print(ex.args)
         print(str(ex))
+
     #trigger timer for next auto check
     if(refresh):
         t = Timer(300, auto_report_trigger, args=(serverID,))
