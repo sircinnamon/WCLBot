@@ -121,6 +121,8 @@ def on_message(message):
         yield from table_command(message)
     elif(message.content.startswith("!wchar")):
         yield from char_command(message)
+    elif(message.content.startswith("!watt")):
+        yield from att_command(message)
     elif(message.content.startswith("!wtest") and verify_user_admin(message.author.id, message.server.id)):
         string = str(server_settings[message.server.id])
         yield from client.send_message(message.channel, "```"+string+"```")
@@ -660,6 +662,62 @@ def char_command(msg):
     yield from client.send_message(msg.channel, "```"+string+"```")
     return string
 
+def att_command(msg):
+    global current_key
+    global server_settings
+    args = msg.content[6:].split(" ")
+    page_range = 16
+    page = 1
+    length = 25
+    for arg in args:
+        if(arg.lower().startswith("range=")):
+            page_range=min(int(arg.lower()[6:]),16)
+        elif(arg.lower().startswith("page=")):
+            page=int(arg[5:])
+        elif(arg.lower().startswith("length=")):
+            if(arg.lower() == "length=all"):
+                length = 0
+            else:
+                length=int(arg[7:])
+    
+    #Indexed by name, data is an array of length range with the number of attended fights in report n in array[n]
+    full_attendance = dict() 
+    full_report_list = pcl.generate_guild_report_list(server_settings[msg.server.id].guild_name, 
+                                                      server_settings[msg.server.id].guild_realm, 
+                                                      server_settings[msg.server.id].guild_region, 
+                                                      key=current_key)
+    full_report_list.reverse()
+    for rep in full_report_list:
+        if rep.zone == -1:
+            full_report_list.remove(rep)
+    report_days=""
+    for i in range((page-1)*(page_range),(page*page_range)):
+        print(str(page)+" "+str(i))
+        report = full_report_list[i]
+        report_days += datetime.datetime.fromtimestamp((report.start/1000)-18000).strftime('%a')[0]
+        fightlist=pcl.generate_fight_list(report.id, key=current_key)
+        attendance_list=get_full_attendance(fightlist)
+        for player in attendance_list:
+            if player.name not in full_attendance:
+                full_attendance[player.name] = [0]*page_range
+            full_attendance[player.name][i-(page-1)*(page_range)] = len(player.fights.attendedFights)
+
+    attendance_rows = [(x[0],x[1],get_attendance_percent(x[1])) for x in list(full_attendance.items())]
+    attendance_rows.sort(key=lambda x: x[0])
+    attendance_rows.sort(key=lambda x: x[2])
+    attendance_rows.reverse()
+    for row in attendance_rows:
+        print(row[0]+" "+str(row[2]))
+    if(length==0):length=len(attendance_rows)
+
+    startdate = datetime.datetime.fromtimestamp((full_report_list[(page-1)*(page_range)].start/1000)-18000).strftime('%Y-%m-%d')
+    enddate = datetime.datetime.fromtimestamp((full_report_list[(page)*(page_range)].start/1000)-18000).strftime('%Y-%m-%d')
+    title = "*ATTENDANCE CHART FROM " + startdate + " TO " + enddate + "*\n"
+    title += "NAME           | % |"+report_days.upper()+"\n"
+    string = title+attendance_table_string(attendance_rows,length)
+    yield from client.send_message(msg.channel, "```"+string+"```")
+    return string
+
 def searchable(string):
     for char in string:
         if char not in " abcdefghijklmnopqrstuvwxyz":
@@ -670,7 +728,7 @@ def get_full_attendance(fightlist):
     players = {}
     for fight in fightlist:
         for player in fight.friendlies:
-            if((player.id not in players) and (player.type != "NPC" and (player.type != "Unknown"))):
+            if((player.id not in players) and (player.type != "NPC" and (player.type != "Unknown") and (player.type != "Pet"))):
                 players[player.id] = player
     return list(players.values())
 
@@ -684,6 +742,31 @@ def shuffle_case(string):
         else: new_string = new_string+low
         odd = not odd
     return new_string
+
+def get_attendance_percent(array):
+    #from an array of fights attended per night, what percent are non-0
+    return round(100*(len(array)-array.count(0))/len(array))
+
+def attendance_table_string(table, length):
+    #Takes a list of tuples formatted as (name,array of attended fights by report, percent attendance)
+    string = ""
+    table.sort(key=lambda x: x[2])
+    table.reverse()
+    for i in range(0,min(length,len(table))):
+        string += attendance_table_string_row(table[i])+"\n"
+    return string
+
+
+def attendance_table_string_row(table_entry):
+    name = table_entry[0]
+    if(len(name)>13):
+        name = name[:13]+"..."
+    format_str = "{0:<{width}}".format(name, width=16)
+    format_str += "{0:<4}".format(table_entry[2])
+    for day in table_entry[1]:
+        if(day==0): format_str+="_"
+        else: format_str+="X"
+    return format_str
 
 
 os.environ['DISCORD_TOKEN'] = get_key("discord_bot_token")
