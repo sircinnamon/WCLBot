@@ -40,6 +40,8 @@ command_list_msg = ("""```Here are the available commands. Some arguments must b
           Format: "!wtable view=[Healing/dps/Tank] fight=[all/fightname/fightid] length=[20/num] report=[recent/code]"
 !wchar - Show a table of a particular view for a particular character. Char is required, other args same as wtable.
           Format: "!wchar char=[charname] view=[Healing/dps/Tank] fight=[all/fightname/fightid] length=[20/num] report=[recent/code]"
+!watt - Show a table of characters in attendance over the last 16 reports. All arguments optional.
+          Format: "!watt length=25 range=16 page=1" Range is the page size of reports, page is how mane pages back to display.
 ```""")
 @client.event
 @asyncio.coroutine
