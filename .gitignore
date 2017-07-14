@@ -4,3 +4,5 @@ pycraftlogs/*
 __*
 data
 data/*
+logs
+logs/*
