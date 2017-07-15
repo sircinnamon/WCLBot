@@ -254,17 +254,23 @@ def report_summary_string(report):
 def report_summary_string_long(report):
     global current_key
     string = report_summary_string(report) + "\n"
-    fightlist = pcl.generate_fight_list(report.id, key=current_key)
-    logging.info("Requested fight list for report "+report.id)
-    fightlist_string = fight_list_string_short(fightlist)
-    string += "\n*FIGHTS* \n" + fightlist_string
-    topdmg_table = pcl.wow_report_tables("damage-done", report.id, key=current_key, end=report.end-report.start)
-    logging.info("Requested damage-done table for report "+report.id)
-    topdmg_string = "\n*DAMAGE DONE* \n" + table_string(topdmg_table, 3)
-    topheal_table = pcl.wow_report_tables("healing", report.id, key=current_key, end=report.end-report.start)
-    logging.info("Requested healing table for report "+report.id)
-    topheal_string = "\n*HEALING* \n" + table_string(topheal_table, 3)
-    string += topdmg_string + topheal_string
+    try:
+        fightlist = pcl.generate_fight_list(report.id, key=current_key)
+        logging.info("Requested fight list for report "+report.id)
+        if(len(fightlist)==0):raise ValueError("Fight list array is empty.")
+        fightlist_string = fight_list_string_short(fightlist)
+        string += "\n*FIGHTS* \n" + fightlist_string
+        topdmg_table = pcl.wow_report_tables("damage-done", report.id, key=current_key, end=report.end-report.start)
+        logging.info("Requested damage-done table for report "+report.id)
+        topdmg_string = "\n*DAMAGE DONE* \n" + table_string(topdmg_table, 3)
+        topheal_table = pcl.wow_report_tables("healing", report.id, key=current_key, end=report.end-report.start)
+        logging.info("Requested healing table for report "+report.id)
+        topheal_string = "\n*HEALING* \n" + table_string(topheal_table, 3)
+        string += topdmg_string + topheal_string
+    except ValueError as ex:
+        # print("Val Error: "+str(ValueError))
+        logging.warning("Val Error: "+str(ex)+"-"+ex.args)
+
     return string
 
 def table_string(table, length, name_width=18, total=0):
@@ -419,15 +425,17 @@ def auto_report_trigger(serverID, refresh=True):
                 messageID = server_settings[serverID].most_recent_log_summary
                 report_queue.append((channel, report_url(reports[0].id)+"\n```"+string+"```", messageID)) #edit message messageID to be this info now
         for r in reports[1:]:
-            logging.info("New log "+str(r.id)+" found for server "+str(serverID))
-            if(serv_info.auto_report_mode_long):
-                string = report_summary_string_long(r)
-            else:
-                string = report_summary_string(r)
-            server = discord.utils.get(client.servers, id=serv_info.server_id)
-            channel = discord.utils.get(server.channels, id=serv_info.default_channel)
-            report_queue.append((channel, report_url(r.id)+"\n```"+string+"```", 0)) #0 for message id to edit - ie there is none
-        if(len(reports) >= 1):
+            #ignore empty logs
+            if(r.end - r.start > 1000):
+                logging.info("New log "+str(r.id)+" found for server "+str(serverID))
+                if(serv_info.auto_report_mode_long):
+                    string = report_summary_string_long(r)
+                else:
+                    string = report_summary_string(r)
+                server = discord.utils.get(client.servers, id=serv_info.server_id)
+                channel = discord.utils.get(server.channels, id=serv_info.default_channel)
+                report_queue.append((channel, report_url(r.id)+"\n```"+string+"```", 0)) #0 for message id to edit - ie there is none
+        if(len(reports) >= 1 and (reports[len(reports)-1].end-reports[len(reports)-1].start > 1000)):
             serv_info.update_recent_log(reports[len(reports)-1].start,reports[len(reports)-1].end)
             server_settings[serverID] = serv_info
             save_server_settings()
