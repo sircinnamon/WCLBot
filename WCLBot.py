@@ -5,6 +5,7 @@ import datetime
 import os
 import pickle
 import pycraftlogs as pcl
+import logging
 from threading import Timer, Thread
 from collections import deque
 from urllib.request import HTTPError
@@ -56,6 +57,7 @@ def on_ready():
     for server in client.servers:
         print(server.name + " ("+server.id+")")
     print('------')
+    logging.info("Logged in successfully")
     thread_list = startup_auto_report()
     asyncio.ensure_future(check_report_queue())
     asyncio.ensure_future(check_server_memberships())
@@ -111,6 +113,7 @@ def on_message(message):
         if(len(message.content.split(" ")) < 2): report = most_recent_report(message.server.id).id
         else: report = message.content.split(" ")[1]
         string = fight_list_string_long(pcl.generate_fight_list(report, key=current_key))
+        logging.info("Requested fight list for report "+report)
         string = report_summary_string(get_report(report)) + string
         yield from client.send_message(message.channel, "```"+string+"```")
     elif(message.content.startswith("!wauto") and verify_user_admin(message.author.id, message.server.id)):
@@ -153,6 +156,7 @@ def initialize_new_server(msg):
         server_settings[msg.server.id] = new_server_info
         save_server_settings()
         yield from client.send_message(msg.channel, "Added new server and admin.")
+        logging.info("New server "+str(msg.server.id)+" initialized.")
         return True
 
 def verify_user_admin(userID, serverID):
@@ -188,6 +192,8 @@ def update_server_guild_info(msg):
                                    +serv_info.guild_realm
                                    +"-"
                                    +serv_info.guild_region)
+    logging.info("Server "+str(msg.server.id)+" guild info updated to "
+                 +serv_info.guild_name+" "+serv_info.guild_realm+"-"+serv_info.guild_region)
     return True
 
 def update_server_default_channel(msg):
@@ -197,6 +203,7 @@ def update_server_default_channel(msg):
     server_settings[msg.server.id] = serv_info
     save_server_settings()
     yield from client.send_message(msg.channel, "This is now the default channel!")
+    logging.info("Server "+str(msg.server.id)+" default channel updated to "+ str(msg.channel.id))
     return True
 
 def add_server_admin(msg):
@@ -204,10 +211,12 @@ def add_server_admin(msg):
     serv_info = server_settings[msg.server.id]
     for admin in msg.mentions:
         serv_info.add_admin(admin.id)
+        logging.info("Admin "+str(admin.id)+" added to server "+str(msg.server.id))
     else:
         for admin in msg.content.split(" "):
             if msg.server.get_member(admin) != None:
                 serv_info.add_admin()
+                logging.info("Admin "+str(admin)+" added to server "+str(msg.server.id))
     server_settings[msg.server.id] = serv_info
     save_server_settings()
     yield from client.send_message(msg.channel, "Admins updated!")
@@ -246,11 +255,14 @@ def report_summary_string_long(report):
     global current_key
     string = report_summary_string(report) + "\n"
     fightlist = pcl.generate_fight_list(report.id, key=current_key)
+    logging.info("Requested fight list for report "+report.id)
     fightlist_string = fight_list_string_short(fightlist)
     string += "\n*FIGHTS* \n" + fightlist_string
     topdmg_table = pcl.wow_report_tables("damage-done", report.id, key=current_key, end=report.end-report.start)
+    logging.info("Requested damage-done table for report "+report.id)
     topdmg_string = "\n*DAMAGE DONE* \n" + table_string(topdmg_table, 3)
     topheal_table = pcl.wow_report_tables("healing", report.id, key=current_key, end=report.end-report.start)
+    logging.info("Requested healing table for report "+report.id)
     topheal_string = "\n*HEALING* \n" + table_string(topheal_table, 3)
     string += topdmg_string + topheal_string
     return string
@@ -323,7 +335,9 @@ def get_difficulty(num):
 
 def get_report(reportID):
     global current_key
-    return pcl.wow_get_report(reportID, key=current_key)
+    report = pcl.wow_get_report(reportID, key=current_key)
+    logging.info("Requested report "+reportID)
+    return report
 
 def most_recent_report(serverID):
     global server_settings
@@ -333,6 +347,7 @@ def most_recent_report(serverID):
         return None
     else:
         reports = pcl.generate_guild_report_list(info.guild_name, info.guild_realm, info.guild_region, key=current_key)
+        logging.info("Requested guild reports for server "+serverID)
         return reports[len(reports)-1]
 
 def toggle_auto_report(msg):
@@ -350,16 +365,19 @@ def toggle_auto_report(msg):
     t.name = serv.server_id
     #print(serv.server_id)
     thread_list.append(t)
+    logging.info("Auto report set to "+str(server_settings[msg.server.id].auto_report)+"for server "+str(msg.server.id))
     yield from client.send_message(msg.channel, "Auto Report mode is now set to "+str(server_settings[msg.server.id].auto_report)+".")
 
 def toggle_auto_report_mode(msg):
     global server_settings
     server_settings[msg.server.id].toggle_auto_report_mode()
     save_server_settings()
+    logging.info("Long auto report set to "+str(server_settings[msg.server.id].auto_report_mode_long)+" for server "+str(msg.server.id))
     yield from client.send_message(msg.channel, "Long Auto Report mode is now set to "+str(server_settings[msg.server.id].auto_report_mode_long)+".")
 
 def auto_report_trigger(serverID, refresh=True):
     print("Timer fired for server "+serverID, flush=True)
+    logging.info("Auto Report timer fired for server "+serverID)
     global server_settings
     global current_key
     global thread_list
@@ -384,12 +402,14 @@ def auto_report_trigger(serverID, refresh=True):
                                                  serv_info.guild_region, 
                                                  start=serv_info.most_recent_log_start,
                                                  key=current_key)
+        logging.info("Requested guild reports for server "+str(serverID))
         if(len(reports)>0 and reports[0].end > serv_info.most_recent_log_end):
             if(serv_info.most_recent_log_end == 0):
                 #just set it and forget it
                 serv_info.most_recent_log_end = reports[0].end
             else:
                 #need to update and edit report summary
+                logging.info("Update to newest log ("+str(reports[0].id)+") found for server "+str(serverID))
                 if(serv_info.auto_report_mode_long):
                     string = report_summary_string_long(reports[0])
                 else:
@@ -399,6 +419,7 @@ def auto_report_trigger(serverID, refresh=True):
                 messageID = server_settings[serverID].most_recent_log_summary
                 report_queue.append((channel, report_url(reports[0].id)+"\n```"+string+"```", messageID)) #edit message messageID to be this info now
         for r in reports[1:]:
+            logging.info("New log "+str(r.id)+" found for server "+str(serverID))
             if(serv_info.auto_report_mode_long):
                 string = report_summary_string_long(r)
             else:
@@ -410,17 +431,21 @@ def auto_report_trigger(serverID, refresh=True):
             serv_info.update_recent_log(reports[len(reports)-1].start,reports[len(reports)-1].end)
             server_settings[serverID] = serv_info
             save_server_settings()
-    except HTTPError:
-        print("HTTP Error: "+str(HTTPError))
-    except KeyError:
-        print("Key Error: "+str(KeyError))
-    except ValueError:
-        print("Val Error: "+str(ValueError))
+    except HTTPError as ex:
+        # print("HTTP Error: "+str(HTTPError))
+        logging.warning("HTTP Error: "+str(ex)+"-"+ex.args)
+    except KeyError as ex:
+        # print("Key Error: "+str(KeyError))
+        logging.warning("Key Error: "+str(ex)+"-"+ex.args)
+    except ValueError as ex:
+        # print("Val Error: "+str(ValueError))
+        logging.warning("Val Error: "+str(ex)+"-"+ex.args)
     except Exception as ex:
-        print("Unexpected error")
-        print(type(ex))
-        print(ex.args)
-        print(str(ex))
+        # print("Unexpected error")
+        # print(type(ex))
+        # print(ex.args)
+        # print(str(ex))
+        logging.warning("Unexpected error\n"+str(type(ex))+"\n"+str(ex.args)+"\n"+str(ex))
 
     #trigger timer for next auto check
     if(refresh):
@@ -442,6 +467,7 @@ def startup_auto_report():
             t.name = serv.server_id
             #print(serv.server_id)
             timers.append(t)
+    logging.info("Auto report started")
     return timers
 
 def __test(code, msg, num):
@@ -490,7 +516,8 @@ def check_server_memberships():
     for entry in server_settings:
         if entry.id not in active_servers:
             del server_settings[entry.id]
-            print("Server "+entry.id + " removed from memory.")
+            logging.warning("Server "+entry.id + " removed from memory.")
+            # print("Server "+entry.id + " removed from memory.")
             save_server_settings()
     asyncio.ensure_future(check_server_memberships())
 
@@ -527,9 +554,11 @@ def table_command(msg):
         report = most_recent_report(msg.server.id)
     else:
         report = pcl.wow_get_report(report, key=current_key)
+        logging.info("Requested report "+reportID)
     endtime=report.end-report.start
     if(fight!="all"):
         fightlist=pcl.generate_fight_list(report.id, key=current_key)
+        logging.info("Requested fight list for report "+reportID)
         if(fight.isdigit()):
             #Assume its a fight id
             for f in fightlist:
@@ -564,6 +593,7 @@ def table_command(msg):
     if(view is None):
         yield from client.send_message(msg.channel, "Please provied a view (damage-done, damage-taken, healing).")
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime)
+    logging.info("Requested "+view+" table from report "+str(report.id)+" for server "+str(msg.server.id))
     string = "*"+view.upper()+"* "+bossname+" - "+report.id+"\n" + table_string(table, length)
     yield from client.send_message(msg.channel, "```"+string+"```")
     return string
@@ -604,8 +634,10 @@ def char_command(msg):
         report = most_recent_report(msg.server.id)
     else:
         report = pcl.wow_get_report(report, key=current_key)
+        logging.info("Requested report "+report.id)
     endtime=report.end-report.start
     fightlist=pcl.generate_fight_list(report.id, key=current_key)
+    logging.info("Requested fight list for report "+report.id)
     attendance_list=get_full_attendance(fightlist)
 
     char=attendance_list[0]
@@ -656,6 +688,7 @@ def char_command(msg):
     if(view is None):
         yield from client.send_message(msg.channel, "Please provied a view (damage-done, damage-taken, healing).")
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime, sourceid=char.id)
+    logging.info("Requested "+view+" table for "+charname+" from report "+str(report.id)+" for server "+str(msg.server.id))
     total = 0
     for entry in table:
         total += entry.total
@@ -688,6 +721,7 @@ def att_command(msg):
                                                       server_settings[msg.server.id].guild_realm, 
                                                       server_settings[msg.server.id].guild_region, 
                                                       key=current_key)
+    logging.info("Requested guild reports for server "+str(msg.server.id))
     full_report_list.reverse()
     for rep in full_report_list:
         if rep.zone == -1:
@@ -698,6 +732,7 @@ def att_command(msg):
         report = full_report_list[i]
         report_days += datetime.datetime.fromtimestamp((report.start/1000)-18000).strftime('%a')[0]
         fightlist=pcl.generate_fight_list(report.id, key=current_key)
+        logging.info("Requested fight list for report "+str(report.id))
         attendance_list=get_full_attendance(fightlist)
         for player in attendance_list:
             if player.name not in full_attendance:
@@ -778,6 +813,9 @@ if(os.environ.get('DISCORD_TOKEN') == None):
     os.environ['DISCORD_TOKEN'] = token
 if(current_key==None):
     current_key = input("You must specify the WCL API key: ")
+
+logging.basicConfig(filename="logs/bot.log",format="(%(asctime)s) %(levelname)s:%(message)s",level=logging.INFO)
+logging.info("Logging configured.")
 
 while(True):
     try:
