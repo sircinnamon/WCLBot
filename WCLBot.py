@@ -113,6 +113,7 @@ def on_message(message):
         if(len(message.content.split(" ")) < 2): report = most_recent_report(message.server.id).id
         else: report = message.content.split(" ")[1]
         string = fight_list_string_long(pcl.generate_fight_list(report, key=current_key))
+        logging.info("Requested fight list for report "+report)
         string = report_summary_string(get_report(report)) + string
         yield from client.send_message(message.channel, "```"+string+"```")
     elif(message.content.startswith("!wauto") and verify_user_admin(message.author.id, message.server.id)):
@@ -371,7 +372,7 @@ def toggle_auto_report_mode(msg):
     global server_settings
     server_settings[msg.server.id].toggle_auto_report_mode()
     save_server_settings()
-    logging.info("Long auto report set to "+str(server_settings[msg.server.id].auto_report_mode_long)+"for server "+str(msg.server.id))
+    logging.info("Long auto report set to "+str(server_settings[msg.server.id].auto_report_mode_long)+" for server "+str(msg.server.id))
     yield from client.send_message(msg.channel, "Long Auto Report mode is now set to "+str(server_settings[msg.server.id].auto_report_mode_long)+".")
 
 def auto_report_trigger(serverID, refresh=True):
@@ -401,13 +402,14 @@ def auto_report_trigger(serverID, refresh=True):
                                                  serv_info.guild_region, 
                                                  start=serv_info.most_recent_log_start,
                                                  key=current_key)
+        logging.info("Requested guild reports for server "+str(serverID))
         if(len(reports)>0 and reports[0].end > serv_info.most_recent_log_end):
             if(serv_info.most_recent_log_end == 0):
                 #just set it and forget it
                 serv_info.most_recent_log_end = reports[0].end
             else:
                 #need to update and edit report summary
-                logging.info("Update to newest log ("+str(reports[0].id)+")found for server "+str(serverID))
+                logging.info("Update to newest log ("+str(reports[0].id)+") found for server "+str(serverID))
                 if(serv_info.auto_report_mode_long):
                     string = report_summary_string_long(reports[0])
                 else:
@@ -443,7 +445,7 @@ def auto_report_trigger(serverID, refresh=True):
         # print(type(ex))
         # print(ex.args)
         # print(str(ex))
-        logging.warning("Unexpected error\n"+type(ex)+"\n"+ex.args+"\n"+str(ex))
+        logging.warning("Unexpected error\n"+str(type(ex))+"\n"+str(ex.args)+"\n"+str(ex))
 
     #trigger timer for next auto check
     if(refresh):
@@ -632,10 +634,10 @@ def char_command(msg):
         report = most_recent_report(msg.server.id)
     else:
         report = pcl.wow_get_report(report, key=current_key)
-        logging.info("Requested report "+reportID)
+        logging.info("Requested report "+report.id)
     endtime=report.end-report.start
     fightlist=pcl.generate_fight_list(report.id, key=current_key)
-    logging.info("Requested fight list for report "+reportID)
+    logging.info("Requested fight list for report "+report.id)
     attendance_list=get_full_attendance(fightlist)
 
     char=attendance_list[0]
