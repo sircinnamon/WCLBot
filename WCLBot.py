@@ -521,7 +521,7 @@ def check_server_memberships():
     global server_settings
     yield from asyncio.sleep(3600)
     active_servers = list([x.id for x in client.servers])
-    for entry in server_settings:
+    for entry in server_settings.values():
         if entry.server_id not in active_servers:
             del server_settings[entry.server_id]
             logging.warning("Server "+entry.server_id + " removed from memory.")
