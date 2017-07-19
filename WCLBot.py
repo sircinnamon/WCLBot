@@ -441,13 +441,13 @@ def auto_report_trigger(serverID, refresh=True):
             save_server_settings()
     except HTTPError as ex:
         # print("HTTP Error: "+str(HTTPError))
-        logging.warning("HTTP Error: "+str(ex)+"-"+ex.args)
+        logging.warning("HTTP Error: "+str(ex)+"-"+str(ex.args))
     except KeyError as ex:
         # print("Key Error: "+str(KeyError))
-        logging.warning("Key Error: "+str(ex)+"-"+ex.args)
+        logging.warning("Key Error: "+str(ex)+"-"+str(ex.args))
     except ValueError as ex:
         # print("Val Error: "+str(ValueError))
-        logging.warning("Val Error: "+str(ex)+"-"+ex.args)
+        logging.warning("Val Error: "+str(ex)+"-"+str(ex.args))
     except Exception as ex:
         # print("Unexpected error")
         # print(type(ex))
