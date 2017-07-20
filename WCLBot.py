@@ -269,7 +269,7 @@ def report_summary_string_long(report):
         string += topdmg_string + topheal_string
     except ValueError as ex:
         # print("Val Error: "+str(ValueError))
-        logging.warning("Val Error: "+str(ex)+"-"+ex.args)
+        logging.warning("Val Error: "+str(ex)+"-"+str(ex.args))
 
     return string
 
