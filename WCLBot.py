@@ -3,7 +3,7 @@ import asyncio
 import time
 import datetime
 import os
-import pickle
+import _pickle as pickle
 import pycraftlogs as pcl
 import logging
 from threading import Timer, Thread
@@ -236,13 +236,16 @@ def load_server_settings():
         pkl_file.close()
 
 def get_key(key_name):
-    with open(".keyfile") as f:
-        keylist = f.readlines()
-    for x in keylist:
-        if(x.split(":"))[0] == key_name:
-            return x.split(":")[1].strip()
-    print(str("Key "+key_name+" not found."))
-    return None
+    try:
+        with open(".keyfile") as f:
+            keylist = f.readlines()
+        for x in keylist:
+            if(x.split(":"))[0] == key_name:
+                return x.split(":")[1].strip()
+        print(str("Key "+key_name+" not found."))
+        return None
+    except:
+        return None
 
 def report_summary_string(report):
     #Convert to Eastern Standard for date (sub 18000 secs)
@@ -354,7 +357,7 @@ def most_recent_report(serverID):
     else:
         reports = pcl.generate_guild_report_list(info.guild_name, info.guild_realm, info.guild_region, key=current_key)
         logging.info("Requested guild reports for server "+serverID)
-        return reports[len(reports)-1]
+        return reports[0]
 
 def toggle_auto_report(msg):
     global server_settings
@@ -562,11 +565,11 @@ def table_command(msg):
         report = most_recent_report(msg.server.id)
     else:
         report = pcl.wow_get_report(report, key=current_key)
-        logging.info("Requested report "+reportID)
+        logging.info("Requested report "+report.id)
     endtime=report.end-report.start
     if(fight!="all"):
         fightlist=pcl.generate_fight_list(report.id, key=current_key)
-        logging.info("Requested fight list for report "+reportID)
+        logging.info("Requested fight list for report "+report.id)
         if(fight.isdigit()):
             #Assume its a fight id
             for f in fightlist:
@@ -814,14 +817,17 @@ def attendance_table_string_row(table_entry):
     return format_str
 
 
-os.environ['DISCORD_TOKEN'] = get_key("discord_bot_token")
 current_key = get_key("warcraftlogs_public_key")
-if(os.environ.get('DISCORD_TOKEN') == None):
+discord_token = get_key("discord_bot_token")
+if(discord_token == None):
     token = input("You must specify the discord bot token: ")
     os.environ['DISCORD_TOKEN'] = token
-if(current_key==None):
+os.environ['DISCORD_TOKEN'] = discord_token
+if(current_key == None):
     current_key = input("You must specify the WCL API key: ")
 
+file = open("logs/bot.log", "a+")
+file.close()
 logging.basicConfig(filename="logs/bot.log",format="(%(asctime)s) %(levelname)s:%(message)s",level=logging.INFO)
 logging.info("Logging configured.")
 

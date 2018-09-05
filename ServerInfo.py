@@ -34,7 +34,7 @@ class ServerInfo(object):
 
     def set_default_channel(self, channelID):
         self.default_channel = channelID
-        this.most_recent_log_summary = 0
+        self.most_recent_log_summary = 0
 
     def update_recent_log(self, start, end):
         if(self.most_recent_log_start > start):
