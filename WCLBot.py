@@ -104,11 +104,11 @@ def on_message(message):
         yield from add_server_admin(message) 
     elif(message.content.startswith("!wreport")):
         if(len(message.content.split(" ")) < 2): 
-            string = report_summary_string_long(most_recent_report(message.server.id))
+            embed = report_summary_embed_long(most_recent_report(message.server.id))
         else: 
             report = message.content.split(" ")[1]
-            string = report_summary_string_long(get_report(report))
-        yield from client.send_message(message.channel, "```"+string+"```")
+            embed = report_summary_embed_long(get_report(report))
+        yield from client.send_message(message.channel,  embed=embed)
     elif(message.content.startswith("!wfights")):
         if(len(message.content.split(" ")) < 2): report = most_recent_report(message.server.id).id
         else: report = message.content.split(" ")[1]
@@ -254,6 +254,15 @@ def report_summary_string(report):
               + str(report.id) + " (" + date + ")\n")
     return string
 
+def report_summary_embed(report):
+    date = datetime.datetime.fromtimestamp((report.start/1000)-18000).strftime('%Y-%m-%d')
+    embed = discord.Embed()
+    embed.title = "{0}   -   {1}".format(report.title, str(report.id))
+    embed.url="https://www.warcraftlogs.com/reports/"+str(report.id)
+    embed.set_author(name="Uploaded by "+report.owner)
+    embed.set_footer(text=date)
+    return embed
+
 def report_summary_string_long(report):
     global current_key
     string = report_summary_string(report) + "\n"
@@ -275,6 +284,33 @@ def report_summary_string_long(report):
         logging.warning("Val Error: "+str(ex)+"-"+str(ex.args))
 
     return string
+
+def report_summary_embed_long(report):
+    global current_key
+    embed = report_summary_embed(report)
+    try:
+        fightlist = pcl.generate_fight_list(report.id, key=current_key)
+        logging.info("Requested fight list for report "+report.id)
+        if(len(fightlist)==0):raise ValueError("Fight list array is empty.")
+        embed.add_field(name="**FIGHTS**", 
+                        value="```"+fight_list_string_short(fightlist)+"```", 
+                        inline=False)
+
+        topdmg_table = pcl.wow_report_tables("damage-done", report.id, key=current_key, end=report.end-report.start)
+        logging.info("Requested damage-done table for report "+report.id)
+        embed.add_field(name="**DAMAGE DONE**", 
+                        value="```"+table_string(topdmg_table, 3)+"```", 
+                        inline=False)
+        
+        topheal_table = pcl.wow_report_tables("healing", report.id, key=current_key, end=report.end-report.start)
+        logging.info("Requested healing table for report "+report.id)
+        embed.add_field(name="**HEALING**", 
+                        value="```"+table_string(topheal_table, 3)+"```", 
+                        inline=False)
+    except ValueError as ex:
+        # print("Val Error: "+str(ValueError))
+        logging.warning("Val Error: "+str(ex)+"-"+str(ex.args))
+    return embed
 
 def table_string(table, length, name_width=18, total=0):
     #Takes a table with a total (healing, damage-done, damage-taken, casts and summons)
@@ -605,9 +641,13 @@ def table_command(msg):
         yield from client.send_message(msg.channel, "Please provied a view (damage-done, damage-taken, healing).")
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime)
     logging.info("Requested "+view+" table from report "+str(report.id)+" for server "+str(msg.server.id))
-    string = "*"+view.upper()+"* "+bossname+" - "+report.id+"\n" + table_string(table, length)
-    yield from client.send_message(msg.channel, "```"+string+"```")
-    return string
+    embed = discord.Embed()
+    embed.title = "**{0}** {1}{2:>100}".format(view.upper(), bossname, "("+report.id+")")
+    embed.add_field(name="",
+                    value="```"+table_string(table, length)+"```",
+                    inline=False)
+    yield from client.send_message(msg.channel, embed=embed)
+    return embed
 
 def char_command(msg):
     global current_key
@@ -760,11 +800,15 @@ def att_command(msg):
 
     startdate = datetime.datetime.fromtimestamp((full_report_list[(page-1)*(page_range)].start/1000)-18000).strftime('%Y-%m-%d')
     enddate = datetime.datetime.fromtimestamp((full_report_list[(page)*(page_range)].start/1000)-18000).strftime('%Y-%m-%d')
-    title = "*ATTENDANCE CHART FROM " + startdate + " TO " + enddate + "*\n"
-    title += "NAME           | % |"+report_days.upper()+"\n"
-    string = title+attendance_table_string(attendance_rows,length)
-    yield from client.send_message(msg.channel, "```"+string+"```")
-    return string
+    embed = discord.Embed()
+    embed.title = "{0:<100}".format("**ATTENDANCE CHART**")
+    embed.set_footer(text=startdate+" TO "+enddate)
+    headers = "NAME           | % |"+report_days.upper()+"\n"
+    embed.add_field(name="",
+                    value="```"+headers+attendance_table_string(attendance_rows,length)+"```",
+                    inline=False)
+    yield from client.send_message(msg.channel, embed=embed)
+    return embed
 
 def searchable(string):
     for char in string:
