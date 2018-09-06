@@ -103,6 +103,7 @@ def on_message(message):
         #argument should be user IDs OR @ messages to the user(s)
         yield from add_server_admin(message) 
     elif(message.content.startswith("!wreport")):
+        yield from client.send_typing(message.channel)
         if(len(message.content.split(" ")) < 2): 
             embed = report_summary_embed_long(most_recent_report(message.server.id))
         else: 
@@ -123,13 +124,20 @@ def on_message(message):
     elif(message.content.startswith("!wcheck") and verify_user_admin(message.author.id, message.server.id)):
         auto_report_trigger(message.server.id, refresh=False)
     elif(message.content.startswith("!wtable")):
+        yield from client.send_typing(message.channel)
         yield from table_command(message)
     elif(message.content.startswith("!wchar")):
+        yield from client.send_typing(message.channel)
         yield from char_command(message)
     elif(message.content.startswith("!watt")):
+        yield from client.send_typing(message.channel)
         yield from att_command(message)
     elif(message.content.startswith("!wtest") and verify_user_admin(message.author.id, message.server.id)):
+        print(message)
+        print(message.server)
+        print(message.server.id)
         string = str(server_settings[message.server.id])
+        print(string)
         yield from client.send_message(message.channel, "```"+string+"```")
     elif(message.content.startswith("!wcheat2") and verify_user_admin(message.author.id, message.server.id)):
         num = int(message.content.split()[1])
@@ -152,7 +160,7 @@ def initialize_new_server(msg):
     else:
         new_server_info = ServerInfo(msg.server.id)
         new_server_info.add_admin(msg.author.id)
-        new_server_info.set_default_channel(msg.server.default_channel)
+        new_server_info.set_default_channel(msg.server.default_channel.id)
         server_settings[msg.server.id] = new_server_info
         save_server_settings()
         yield from client.send_message(msg.channel, "Added new server and admin.")
