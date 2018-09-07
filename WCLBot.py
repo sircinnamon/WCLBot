@@ -44,6 +44,7 @@ command_list_msg = ("""```Here are the available commands. Some arguments must b
 !watt - Show a table of characters in attendance over the last 16 reports. All arguments optional.
           Format: "!watt length=25 range=16 page=1" Range is the page size of reports, page is how mane pages back to display.
 ```""")
+private_message_warning = ("""\n`Sorry, only help messages can be whispered. Other private messages are not supported. Try !wcommands.`""")
 @client.event
 @asyncio.coroutine
 def on_ready():
@@ -89,8 +90,7 @@ def on_message(message):
         else:
             yield from client.send_message(message.author, command_list_msg)
     elif(message.server is None):
-        warning = "\n`Sorry, only help messages can be whispered. Other private messages are not supported. Try !wcommands.`"
-        yield from client.send_message(message.channel, shuffle_case(message.clean_content)+" "+warning)
+        yield from client.send_message(message.channel, shuffle_case(message.clean_content)+" "+private_message_warning)
     elif(message.content.startswith("!w") and not verify_server_registered(message.server.id)):
         yield from client.send_message(message.channel, serv_not_registered_msg)
     elif(message.content.startswith("!wguild ") and verify_user_admin(message.author.id, message.server.id)):
@@ -133,11 +133,7 @@ def on_message(message):
         yield from client.send_typing(message.channel)
         yield from att_command(message)
     elif(message.content.startswith("!wtest") and verify_user_admin(message.author.id, message.server.id)):
-        print(message)
-        print(message.server)
-        print(message.server.id)
         string = str(server_settings[message.server.id])
-        print(string)
         yield from client.send_message(message.channel, "```"+string+"```")
     elif(message.content.startswith("!wcheat2") and verify_user_admin(message.author.id, message.server.id)):
         num = int(message.content.split()[1])
