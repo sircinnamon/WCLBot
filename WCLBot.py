@@ -145,14 +145,8 @@ def update_server_guild_info(msg):
                            )
     server_settings[msg.server.id] = serv_info
     save_server_settings()
-    yield from client.send_message(msg.channel, "Server guild set to "
-                                   +serv_info.guild_name
-                                   +" "
-                                   +serv_info.guild_realm
-                                   +"-"
-                                   +serv_info.guild_region)
-    logging.info("Server "+str(msg.server.id)+" guild info updated to "
-                 +serv_info.guild_name+" "+serv_info.guild_realm+"-"+serv_info.guild_region)
+    yield from client.send_message(msg.channel, "Server guild set to <{} {}-{}>".format(serv_info.guild_name, serv_info.guild_realm, serv_info.guild_region))
+    logging.info("Server {} guild info updated to <{} {}-{}>".format(str(msg.server.id),serv_info.guild_name,serv_info.guild_realm,serv_info.guild_region))
     return True
 
 def update_server_default_channel(msg):
@@ -162,7 +156,7 @@ def update_server_default_channel(msg):
     server_settings[msg.server.id] = serv_info
     save_server_settings()
     yield from client.send_message(msg.channel, "This is now the default channel!")
-    logging.info("Server "+str(msg.server.id)+" default channel updated to "+ str(msg.channel.id))
+    logging.info("Server {} default channel updated to {}".format(str(msg.server.id),str(msg.channel.id)))
     return True
 
 def add_server_admin(msg):
@@ -170,12 +164,12 @@ def add_server_admin(msg):
     serv_info = server_settings[msg.server.id]
     for admin in msg.mentions:
         serv_info.add_admin(admin.id)
-        logging.info("Admin "+str(admin.id)+" added to server "+str(msg.server.id))
+        logging.info("Admin {} added to server {}".format(str(admin.id),str(msg.server.id)))
     else:
         for admin in msg.content.split(" "):
             if msg.server.get_member(admin) != None:
                 serv_info.add_admin()
-                logging.info("Admin "+str(admin)+" added to server "+str(msg.server.id))
+                logging.info("Admin {} added to server {}".format(str(admin.id),str(msg.server.id)))
     server_settings[msg.server.id] = serv_info
     save_server_settings()
     yield from client.send_message(msg.channel, "Admins updated!")
@@ -206,13 +200,6 @@ def get_key(key_name):
     except:
         return None
 
-def report_summary_string(report):
-    #Convert to Eastern Standard for date (sub 18000 secs)
-    date = datetime.datetime.fromtimestamp((report.start/1000)-18000).strftime('%Y-%m-%d')
-    string = (report.title + ". Uploaded by " + report.owner + ". - " 
-              + str(report.id) + " (" + date + ")\n")
-    return string
-
 def report_summary_embed(report):
     date = datetime.datetime.fromtimestamp((report.start/1000)-18000).strftime('%Y-%m-%d')
     embed = discord.Embed()
@@ -221,28 +208,6 @@ def report_summary_embed(report):
     embed.set_author(name="Uploaded by "+report.owner)
     embed.set_footer(text=date)
     return embed
-
-def report_summary_string_long(report):
-    global current_key
-    string = report_summary_string(report) + "\n"
-    try:
-        fightlist = pcl.generate_fight_list(report.id, key=current_key)
-        logging.info("Requested fight list for report "+report.id)
-        if(len(fightlist)==0):raise ValueError("Fight list array is empty.")
-        fightlist_string = fight_list_string_short(fightlist)
-        string += "\n*FIGHTS* \n" + fightlist_string
-        topdmg_table = pcl.wow_report_tables("damage-done", report.id, key=current_key, end=report.end-report.start)
-        logging.info("Requested damage-done table for report "+report.id)
-        topdmg_string = "\n*DAMAGE DONE* \n" + table_string(topdmg_table, 3)
-        topheal_table = pcl.wow_report_tables("healing", report.id, key=current_key, end=report.end-report.start)
-        logging.info("Requested healing table for report "+report.id)
-        topheal_string = "\n*HEALING* \n" + table_string(topheal_table, 3)
-        string += topdmg_string + topheal_string
-    except ValueError as ex:
-        # print("Val Error: "+str(ValueError))
-        logging.warning("Val Error: "+str(ex)+"-"+str(ex.args))
-
-    return string
 
 def report_summary_embed_long(report):
     global current_key
@@ -369,8 +334,8 @@ def toggle_auto_report(msg):
     t.name = msg.server.id
     #print(serv.server_id)
     thread_list.append(t)
-    logging.info("Auto report set to "+str(server_settings[msg.server.id].auto_report)+"for server "+str(msg.server.id))
-    yield from client.send_message(msg.channel, "Auto Report mode is now set to "+str(server_settings[msg.server.id].auto_report)+".")
+    logging.info("Auto report set to {} for server {}".format(str(server_settings[msg.server.id].auto_report),str(msg.server.id)))
+    yield from client.send_message(msg.channel, "Auto Report mode is now set to {}.".format(str(server_settings[msg.server.id].auto_report)))
 
 def toggle_auto_report_mode(msg):
     global server_settings
@@ -413,7 +378,7 @@ def auto_report_trigger(serverID, refresh=True):
                 serv_info.most_recent_log_end = reports[0].end
             else:
                 #need to update and edit report summary
-                logging.info("Update to newest log ("+str(reports[0].id)+") found for server "+str(serverID))
+                logging.info("Update to newest log ({}) found for server {}".format(str(reports[0].id),str(serverID)))
                 if(serv_info.auto_report_mode_long):
                     string = report_summary_string_long(reports[0])
                 else:
@@ -425,7 +390,7 @@ def auto_report_trigger(serverID, refresh=True):
         for r in reports[1:]:
             #ignore empty logs
             if(r.end - r.start > 1000):
-                logging.info("New log "+str(r.id)+" found for server "+str(serverID))
+                logging.info("New log {} found for server {}".format(str(r.id),str(serverID)))
                 if(serv_info.auto_report_mode_long):
                     string = report_summary_string_long(r)
                 else:
@@ -516,7 +481,7 @@ def check_server_memberships():
     asyncio.ensure_future(check_server_memberships())
 
 def report_url(reportID):
-    return "https://www.warcraftlogs.com/reports/"+reportID+"/"
+    return "https://www.warcraftlogs.com/reports/{}/".format(reportID)
 
 def table_command(msg):
     global current_key
@@ -591,7 +556,7 @@ def table_command(msg):
     embed = discord.Embed()
     embed.title = "**{0}** {1:<30}{2:>50}".format(view.upper(), bossname, "("+report.id+")")
     embed.add_field(name="Top {} values".format(length),
-                    value="```"+table_string(table, length)+"```",
+                    value="```{}```".format(table_string(table, length)),
                     inline=False)
     yield from client.send_message(msg.channel, embed=embed)
     return embed
@@ -686,12 +651,12 @@ def char_command(msg):
     if(view is None):
         yield from client.send_message(msg.channel, "Please provied a view (damage-done, damage-taken, healing).")
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime, sourceid=char.id)
-    logging.info("Requested "+view+" table for "+charname+" from report "+str(report.id)+" for server "+str(msg.server.id))
+    logging.info("Requested {} table for {} from report {} for server {}".format(view,charname,str(report.id),str(msg.server.id)))
     total = 0
     for entry in table:
         total += entry.total
 
-    string = "*"+charname.upper()+" "+view.upper()+"* "+bossname+" - "+report.id+"\n" + table_string(table, length, total=total)
+    string = "*{} {}* {} - {}\n".format(charname.upper(),view.upper(),bossname,report.id) + table_string(table, length, total=total)
     yield from client.send_message(msg.channel, "```"+string+"```")
     return string
 
