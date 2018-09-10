@@ -61,7 +61,7 @@ def on_ready():
     print('------')
     print("Current servers:")
     for server in client.servers:
-        print(server.name + " ("+server.id+")")
+        print("* {} ({})".format(server.name,server.id))
     print('------')
     logging.info("Logged in successfully")
     thread_list = startup_auto_report()
@@ -206,9 +206,9 @@ def report_summary_embed(report):
     date = datetime.datetime.fromtimestamp((report.start/1000)-18000).strftime('%Y-%m-%d')
     embed = discord.Embed()
     embed.title = "{0}   -   {1}".format(report.title, str(report.id))
+    embed.title = "**{0:<40}** {1:>50}".format(report.title, "("+str(report.id)+")")
     embed.url="https://www.warcraftlogs.com/reports/"+str(report.id)
-    embed.set_author(name="Uploaded by "+report.owner)
-    embed.set_footer(text=date)
+    embed.set_footer(text="Report uploaded by {} on {}".format(report.owner,date))
     return embed
 
 def report_summary_embed_long(report):
@@ -218,19 +218,19 @@ def report_summary_embed_long(report):
         fightlist = pcl.generate_fight_list(report.id, key=current_key)
         logging.info("Requested fight list for report "+report.id)
         if(len(fightlist)==0):raise ValueError("Fight list array is empty.")
-        embed.add_field(name="**FIGHTS**", 
+        embed.add_field(name="Fights", 
                         value="```"+fight_list_string_short(fightlist)+"```", 
                         inline=False)
 
         topdmg_table = pcl.wow_report_tables("damage-done", report.id, key=current_key, end=report.end-report.start)
         logging.info("Requested damage-done table for report "+report.id)
-        embed.add_field(name="**DAMAGE DONE**", 
+        embed.add_field(name="Top DPS", 
                         value="```"+table_string(topdmg_table, 3)+"```", 
                         inline=False)
         
         topheal_table = pcl.wow_report_tables("healing", report.id, key=current_key, end=report.end-report.start)
         logging.info("Requested healing table for report "+report.id)
-        embed.add_field(name="**HEALING**", 
+        embed.add_field(name="Top Healers", 
                         value="```"+table_string(topheal_table, 3)+"```", 
                         inline=False)
     except ValueError as ex:
@@ -291,11 +291,11 @@ def fight_list_string_long(fightlist):
     for fight in fightlist:
         if(fight.boss != 0):
             difficulty = get_difficulty(fight.difficulty)[0]
-            string += "{0:>3}: {1} {2:<25} - ".format(fight.id, difficulty, fight.name)
+            string += "{0:>3}: {1} {2:<20} - ".format(fight.id, difficulty, fight.name)
             if(fight.kill == False):
-                string+=" Wipe:{:{align}{width}.2%}".format(fight.fightPercentage/10000,width=6,align=">")
+                string+="{:{align}{width}.2%}".format(fight.fightPercentage/10000,width=6,align=">")
             else:
-                string+=" Kill"
+                string+="{:{align}{width}}".format("Kill",width=6,align=">")
             string+="\n"
     return string
 
@@ -343,7 +343,7 @@ def toggle_auto_report_mode(msg):
     global server_settings
     server_settings[msg.server.id].toggle_auto_report_mode()
     save_server_settings()
-    logging.info("Long auto report set to "+str(server_settings[msg.server.id].auto_report_mode_long)+" for server "+str(msg.server.id))
+    logging.info("Long auto report set to {} for server {}".format(str(server_settings[msg.server.id].auto_report_mode_long),str(msg.server.id)))
     yield from client.send_message(msg.channel, "Long Auto Report mode is now set to "+str(server_settings[msg.server.id].auto_report_mode_long)+".")
 
 def auto_report_trigger(serverID, refresh=True):
@@ -382,24 +382,24 @@ def auto_report_trigger(serverID, refresh=True):
                 #need to update and edit report summary
                 logging.info("Update to newest log ({}) found for server {}".format(str(reports[0].id),str(serverID)))
                 if(serv_info.auto_report_mode_long):
-                    string = report_summary_string_long(reports[0])
+                    embed = report_summary_embed_long(reports[0])
                 else:
-                    string = report_summary_string(reports[0])
+                    embed = report_summary_embed(reports[0])
                 server = discord.utils.get(client.servers, id=serv_info.server_id)
                 channel = discord.utils.get(server.channels, id=serv_info.default_channel)
                 messageID = server_settings[serverID].most_recent_log_summary
-                report_queue.append((channel, report_url(reports[0].id)+"\n```"+string+"```", messageID)) #edit message messageID to be this info now
+                report_queue.append((channel, embed, messageID)) #edit message messageID to be this info now
         for r in reports[1:]:
             #ignore empty logs
             if(r.end - r.start > 1000):
                 logging.info("New log {} found for server {}".format(str(r.id),str(serverID)))
                 if(serv_info.auto_report_mode_long):
-                    string = report_summary_string_long(r)
+                    embed = report_summary_embed_long(r)
                 else:
-                    string = report_summary_string(r)
+                    embed = report_summary_embed(r)
                 server = discord.utils.get(client.servers, id=serv_info.server_id)
                 channel = discord.utils.get(server.channels, id=serv_info.default_channel)
-                report_queue.append((channel, report_url(r.id)+"\n```"+string+"```", 0)) #0 for message id to edit - ie there is none
+                report_queue.append((channel, embed, 0)) #0 for message id to edit - ie there is none
         if(len(reports) >= 1 and (reports[len(reports)-1].end-reports[len(reports)-1].start > 1000)):
             serv_info.update_recent_log(reports[len(reports)-1].start,reports[len(reports)-1].end)
             server_settings[serverID] = serv_info
@@ -456,16 +456,16 @@ def check_report_queue():
     while(len(report_queue)>0):
         rep = report_queue.popleft()
         if(rep[2]==0):
-            message = yield from client.send_message(rep[0], rep[1])
+            message = yield from client.send_message(rep[0], embed=rep[1])
         else:
             try:
                 message = yield from client.get_message(rep[0],rep[2])
             except discord.NotFound:
                 message = None
             if(message is None):
-                message = yield from client.send_message(rep[0], rep[1])
+                message = yield from client.send_message(rep[0], embed=rep[1])
             else:
-                message = yield from client.edit_message(message, rep[1])
+                message = yield from client.edit_message(message, embed=rep[1])
         server_settings[message.server.id].most_recent_log_summary = message.id
     asyncio.ensure_future(check_report_queue())
 
@@ -556,7 +556,8 @@ def table_command(msg):
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime)
     logging.info("Requested "+view+" table from report "+str(report.id)+" for server "+str(msg.server.id))
     embed = discord.Embed()
-    embed.title = "**{0}** {1:<30}{2:>50}".format(view.upper(), bossname, "("+report.id+")")
+    embed.title = "**{0}** {1:<30}{2:>70}".format(view.upper(), bossname, "|")
+    embed.set_footer(text="Taken from report "+report.id)
     embed.add_field(name="Top {} values".format(length),
                     value="```{}```".format(table_string(table, length)),
                     inline=False)
@@ -657,10 +658,14 @@ def char_command(msg):
     total = 0
     for entry in table:
         total += entry.total
-
-    string = "*{} {}* {} - {}\n".format(charname.upper(),view.upper(),bossname,report.id) + table_string(table, length, total=total)
-    yield from client.send_message(msg.channel, "```"+string+"```")
-    return string
+    embed = discord.Embed()
+    embed.title = "**{0} {1}** {2:<30}{3:>60}".format(charname.upper(), view.upper(), bossname, "|")
+    embed.set_footer(text="Taken from report "+report.id)
+    embed.add_field(name="Abilities",
+                    value="```{}```".format(table_string(table, length, total=total)),
+                    inline=False)
+    yield from client.send_message(msg.channel, embed=embed)
+    return embed
 
 def att_command(msg):
     global current_key
@@ -799,8 +804,11 @@ def fights_command(message):
     else: report = message.content.split(" ")[1]
     string = fight_list_string_long(pcl.generate_fight_list(report, key=current_key))
     logging.info("Requested fight list for report "+report)
-    string = report_summary_string(get_report(report)) + string
-    yield from client.send_message(message.channel, "```"+string+"```")
+    embed = report_summary_embed(get_report(report))
+    embed.add_field(name="Pulls logged in last report",
+                    value="```"+string+"```",
+                    inline=False)
+    yield from client.send_message(message.channel, embed=embed)
 
 def check_command(message):
     yield from client.send_message(message.channel, "Checking for updates...")
