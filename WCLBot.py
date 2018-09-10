@@ -23,10 +23,11 @@ server_settings = dict()
 thread_list = list()
 report_queue = deque()
 
-serv_not_registered_msg = ("""```Whoops! This server is not yet registered. Please have your server admin use the !winitialize command (!whelp for more info)!```""")
-help_msg = ("""```Hello! I'm Weasel the WarcraftLogs API Discord bot! I can be used to view logs at a glance, track attendance, brag about parses and more! For help with setup, type '!wsetup'. For a full command list, type '!wcommands'. I was created by sircinnamon@gmail.com.```""")
-setup_help_msg = ("""```If you are an admin, start by typing '!winitialize' to add your server to the registry. This will allow you to use the bot. To set up automatic log tracking, first type '!wguild <guildname> <realm>-<region>'. To enable automatic log reporting, type '!wautolog'. To enable long form reporting, type '!wlonglog'. To change the channel the bot posts in, type '!wchannel' in a channel the bot can view. To allow others to change these settings, type '!wadmin' followed by an @ to all the desired users.```""")
-command_list_msg = ("""```Here are the available commands. Some arguments must be described with <argname>=<arg>. These are often optional.
+CMD_PREFIX = "/w"
+serv_not_registered_msg =   ("""```Whoops! This server is not yet registered. Please have your server admin use the !winitialize command (!whelp for more info)!```""")
+help_msg =                  ("""```Hello! I'm Weasel the WarcraftLogs API Discord bot! I can be used to view logs at a glance, track attendance, brag about parses and more! For help with setup, type '!wsetup'. For a full command list, type '!wcommands'. I was created by sircinnamon@gmail.com.```""")
+setup_help_msg =            ("""```If you are an admin, start by typing '!winitialize' to add your server to the registry. This will allow you to use the bot. To set up automatic log tracking, first type '!wguild <guildname> <realm>-<region>'. To enable automatic log reporting, type '!wautolog'. To enable long form reporting, type '!wlonglog'. To change the channel the bot posts in, type '!wchannel' in a channel the bot can view. To allow others to change these settings, type '!wadmin' followed by an @ to all the desired users.```""")
+command_list_msg =          ("""```Here are the available commands. Some arguments must be described with <argname>=<arg>. These are often optional.
 !winitialize - Add a server to the register to allow bot use.
 !whelp - Show help message.
 !wsetup - Show setup instructions.
@@ -44,6 +45,33 @@ command_list_msg = ("""```Here are the available commands. Some arguments must b
 !watt - Show a table of characters in attendance over the last 16 reports. All arguments optional.
           Format: "!watt length=25 range=16 page=1" Range is the page size of reports, page is how mane pages back to display.
 ```""")
+private_message_warning =   ("""\n`Sorry, only help messages can be whispered. Other private messages are not supported. Try !wcommands.`""")
+admin_only_warning =   ("""\n`Sorry, only admins can execute that command.`""")
+
+server_settings_file = "data/server_settings.pkl"
+
+class_colors = {
+    "DeathKnight":0xC41F3B,
+    "DemonHunter":0xA330C9,
+    "Druid":0xFF7D0A,
+    "Hunter":0xABD473,
+    "Mage":0x40C7EB,
+    "Monk":0x00FF96,
+    "Paladin":0xF58CBA,
+    "Priest":0xFFFFFF,
+    "Rogue":0xFFF569,
+    "Shaman":0x0070DE,
+    "Warlock":0x8787ED,
+    "Warrior":0xC79C6E
+}
+
+difficulty_colors = {
+    "LFR":0x1eff00,
+    "Normal":0x0070dd,
+    "Heroic":0xa335ee,
+    "Mythic":0xff8000,
+}
+
 @client.event
 @asyncio.coroutine
 def on_ready():
@@ -55,7 +83,7 @@ def on_ready():
     print('------')
     print("Current servers:")
     for server in client.servers:
-        print(server.name + " ("+server.id+")")
+        print("* {} ({})".format(server.name,server.id))
     print('------')
     logging.info("Logged in successfully")
     thread_list = startup_auto_report()
@@ -68,75 +96,30 @@ def on_message(message):
     global enabled
     global current_key
 
-
-    if(message.server is not None): print(message.server.name+"/"+message.channel.name+" "+message.author.name+":")
-    elif(message.channel.is_private and message.channel.type is discord.ChannelType.group): print("PRIVATE/"+message.channel.name+" "+message.author.name+":")
-    elif(message.channel.is_private): print("PRIVATE - "+message.author.name+":")
+    if(message.server is not None): print("["+message.server.name+"/"+message.channel.name+"] "+message.author.name+":")
+    elif(message.channel.is_private and message.channel.type is discord.ChannelType.group): print("[PRIVATE/"+message.channel.name+"] "+message.author.name+":")
+    elif(message.channel.is_private): print("[PRIVATE] "+message.author.name+":")
     print(message.content)
 
     if(message.author == client.user):
         #Ignore own messages
-        pass
-    elif(message.content.startswith("!winitialize") and message.server is not None):
-        yield from initialize_new_server(message)
-    elif(message.content.startswith("!whelp")):
-        yield from client.send_message(message.channel, help_msg)
-    elif(message.content.startswith("!wsetup")):
-        yield from client.send_message(message.channel, setup_help_msg)
-    elif(message.content.startswith("!wcommands")):
-        if(message.channel.is_private):
-            yield from client.send_message(message.channel, command_list_msg)
-        else:
-            yield from client.send_message(message.author, command_list_msg)
-    elif(message.server is None):
-        warning = "\n`Sorry, only help messages can be whispered. Other private messages are not supported. Try !wcommands.`"
-        yield from client.send_message(message.channel, shuffle_case(message.clean_content)+" "+warning)
-    elif(message.content.startswith("!w") and not verify_server_registered(message.server.id)):
-        yield from client.send_message(message.channel, serv_not_registered_msg)
-    elif(message.content.startswith("!wguild ") and verify_user_admin(message.author.id, message.server.id)):
-        #format <guildname> <realmname>-<region>
-        yield from update_server_guild_info(message)
-    elif(message.content.startswith("!wchannel") and verify_user_admin(message.author.id, message.server.id)):
-        #no extra arguments - set speaking channel to channel message is sent in
-        yield from update_server_default_channel(message) 
-    elif(message.content.startswith("!wadmin ") and verify_user_admin(message.author.id, message.server.id)):
-        #argument should be user IDs OR @ messages to the user(s)
-        yield from add_server_admin(message) 
-    elif(message.content.startswith("!wreport")):
-        if(len(message.content.split(" ")) < 2): 
-            string = report_summary_string_long(most_recent_report(message.server.id))
-        else: 
-            report = message.content.split(" ")[1]
-            string = report_summary_string_long(get_report(report))
-        yield from client.send_message(message.channel, "```"+string+"```")
-    elif(message.content.startswith("!wfights")):
-        if(len(message.content.split(" ")) < 2): report = most_recent_report(message.server.id).id
-        else: report = message.content.split(" ")[1]
-        string = fight_list_string_long(pcl.generate_fight_list(report, key=current_key))
-        logging.info("Requested fight list for report "+report)
-        string = report_summary_string(get_report(report)) + string
-        yield from client.send_message(message.channel, "```"+string+"```")
-    elif(message.content.startswith("!wauto") and verify_user_admin(message.author.id, message.server.id)):
-        yield from toggle_auto_report(message)
-    elif(message.content.startswith("!wlongmode") and verify_user_admin(message.author.id, message.server.id)):
-        yield from toggle_auto_report_mode(message)
-    elif(message.content.startswith("!wcheck") and verify_user_admin(message.author.id, message.server.id)):
-        auto_report_trigger(message.server.id, refresh=False)
-    elif(message.content.startswith("!wtable")):
-        yield from table_command(message)
-    elif(message.content.startswith("!wchar")):
-        yield from char_command(message)
-    elif(message.content.startswith("!watt")):
-        yield from att_command(message)
-    elif(message.content.startswith("!wtest") and verify_user_admin(message.author.id, message.server.id)):
-        string = str(server_settings[message.server.id])
-        yield from client.send_message(message.channel, "```"+string+"```")
-    elif(message.content.startswith("!wcheat2") and verify_user_admin(message.author.id, message.server.id)):
-        num = int(message.content.split()[1])
-        __test(2, message, num)
-    elif(message.content.startswith("!wcheat") and verify_user_admin(message.author.id, message.server.id)):
-        num = int(message.content.split()[1])
-        __test(1, message, num)
+        return
+    for command in command_set:
+        for command_str in command["commands"]:
+            if message.content.startswith(CMD_PREFIX+command_str):
+                yield from client.send_typing(message.channel)
+                if(command["allow_private"]==False and message.server is None):
+                    yield from client.send_message(message.channel, shuffle_case(message.clean_content)+" "+private_message_warning)
+                    return
+                if(command["admin_only"] and not verify_user_admin(message.author.id, message.server.id)):
+                    yield from client.send_message(message.channel, admin_only_warning)
+                    return
+                if(command["require_initialized"] and not verify_server_registered(message.server.id)):
+                    yield from client.send_message(message.channel, serv_not_registered_msg)
+                    return
+                yield from command["function"](message)
+                return
+
 
 @client.event
 @asyncio.coroutine
@@ -152,7 +135,7 @@ def initialize_new_server(msg):
     else:
         new_server_info = ServerInfo(msg.server.id)
         new_server_info.add_admin(msg.author.id)
-        new_server_info.set_default_channel(msg.server.default_channel)
+        new_server_info.set_default_channel(msg.server.default_channel.id)
         server_settings[msg.server.id] = new_server_info
         save_server_settings()
         yield from client.send_message(msg.channel, "Added new server and admin.")
@@ -186,14 +169,8 @@ def update_server_guild_info(msg):
                            )
     server_settings[msg.server.id] = serv_info
     save_server_settings()
-    yield from client.send_message(msg.channel, "Server guild set to "
-                                   +serv_info.guild_name
-                                   +" "
-                                   +serv_info.guild_realm
-                                   +"-"
-                                   +serv_info.guild_region)
-    logging.info("Server "+str(msg.server.id)+" guild info updated to "
-                 +serv_info.guild_name+" "+serv_info.guild_realm+"-"+serv_info.guild_region)
+    yield from client.send_message(msg.channel, "Server guild set to <{} {}-{}>".format(serv_info.guild_name, serv_info.guild_realm, serv_info.guild_region))
+    logging.info("Server {} guild info updated to <{} {}-{}>".format(str(msg.server.id),serv_info.guild_name,serv_info.guild_realm,serv_info.guild_region))
     return True
 
 def update_server_default_channel(msg):
@@ -203,7 +180,7 @@ def update_server_default_channel(msg):
     server_settings[msg.server.id] = serv_info
     save_server_settings()
     yield from client.send_message(msg.channel, "This is now the default channel!")
-    logging.info("Server "+str(msg.server.id)+" default channel updated to "+ str(msg.channel.id))
+    logging.info("Server {} default channel updated to {}".format(str(msg.server.id),str(msg.channel.id)))
     return True
 
 def add_server_admin(msg):
@@ -211,12 +188,12 @@ def add_server_admin(msg):
     serv_info = server_settings[msg.server.id]
     for admin in msg.mentions:
         serv_info.add_admin(admin.id)
-        logging.info("Admin "+str(admin.id)+" added to server "+str(msg.server.id))
+        logging.info("Admin {} added to server {}".format(str(admin.id),str(msg.server.id)))
     else:
         for admin in msg.content.split(" "):
             if msg.server.get_member(admin) != None:
                 serv_info.add_admin()
-                logging.info("Admin "+str(admin)+" added to server "+str(msg.server.id))
+                logging.info("Admin {} added to server {}".format(str(admin.id),str(msg.server.id)))
     server_settings[msg.server.id] = serv_info
     save_server_settings()
     yield from client.send_message(msg.channel, "Admins updated!")
@@ -224,14 +201,14 @@ def add_server_admin(msg):
 
 def save_server_settings():
     global server_settings
-    pkl_file = open('data/server_settings.pkl', 'wb')
+    pkl_file = open(server_settings_file, 'wb')
     pickle.dump(server_settings, pkl_file)
     pkl_file.close()
 
 def load_server_settings():
     global server_settings
-    if(os.path.isfile('data/server_settings.pkl') == True):
-        pkl_file = open('data/server_settings.pkl', 'rb')
+    if(os.path.isfile(server_settings_file) == True):
+        pkl_file = open(server_settings_file, 'rb')
         server_settings = pickle.load(pkl_file)
         pkl_file.close()
 
@@ -247,34 +224,45 @@ def get_key(key_name):
     except:
         return None
 
-def report_summary_string(report):
-    #Convert to Eastern Standard for date (sub 18000 secs)
+def report_summary_embed(report):
     date = datetime.datetime.fromtimestamp((report.start/1000)-18000).strftime('%Y-%m-%d')
-    string = (report.title + ". Uploaded by " + report.owner + ". - " 
-              + str(report.id) + " (" + date + ")\n")
-    return string
+    embed = discord.Embed()
+    embed.title = "**{0:<70}** {1:>20}".format(report.title, "("+str(report.id)+")")
+    embed.url="https://www.warcraftlogs.com/reports/"+str(report.id)
+    embed.set_footer(text="Report uploaded by {} on {}".format(report.owner,date))
+    return embed
 
-def report_summary_string_long(report):
+def report_summary_embed_long(report):
     global current_key
-    string = report_summary_string(report) + "\n"
+    embed = report_summary_embed(report)
     try:
         fightlist = pcl.generate_fight_list(report.id, key=current_key)
         logging.info("Requested fight list for report "+report.id)
         if(len(fightlist)==0):raise ValueError("Fight list array is empty.")
-        fightlist_string = fight_list_string_short(fightlist)
-        string += "\n*FIGHTS* \n" + fightlist_string
+        embed.add_field(name="Fights", 
+                        value="```"+fight_list_string_short(fightlist)+"```", 
+                        inline=False)
+
         topdmg_table = pcl.wow_report_tables("damage-done", report.id, key=current_key, end=report.end-report.start)
         logging.info("Requested damage-done table for report "+report.id)
-        topdmg_string = "\n*DAMAGE DONE* \n" + table_string(topdmg_table, 3)
+        embed.add_field(name="Top DPS", 
+                        value="```"+table_string(topdmg_table, 3)+"```", 
+                        inline=False)
+        
         topheal_table = pcl.wow_report_tables("healing", report.id, key=current_key, end=report.end-report.start)
         logging.info("Requested healing table for report "+report.id)
-        topheal_string = "\n*HEALING* \n" + table_string(topheal_table, 3)
-        string += topdmg_string + topheal_string
+        embed.add_field(name="Top Healers", 
+                        value="```"+table_string(topheal_table, 3)+"```", 
+                        inline=False)
     except ValueError as ex:
         # print("Val Error: "+str(ValueError))
         logging.warning("Val Error: "+str(ex)+"-"+str(ex.args))
-
-    return string
+    difficulty=0
+    for fight in fightlist:
+        if hasattr(fight, "difficulty"):
+            difficulty=max(difficulty, fight.difficulty)
+    embed.colour = discord.Colour(colour_map(get_difficulty(difficulty)))
+    return embed
 
 def table_string(table, length, name_width=18, total=0):
     #Takes a table with a total (healing, damage-done, damage-taken, casts and summons)
@@ -329,11 +317,11 @@ def fight_list_string_long(fightlist):
     for fight in fightlist:
         if(fight.boss != 0):
             difficulty = get_difficulty(fight.difficulty)[0]
-            string += "{0:>3}: {1} {2:<25} - ".format(fight.id, difficulty, fight.name)
+            string += "{0:>3}: {1} {2:<20} - ".format(fight.id, difficulty, fight.name)
             if(fight.kill == False):
-                string+=" Wipe:{:{align}{width}.2%}".format(fight.fightPercentage/10000,width=6,align=">")
+                string+="{:{align}{width}.2%}".format(fight.fightPercentage/10000,width=6,align=">")
             else:
-                string+=" Kill"
+                string+="{:{align}{width}}".format("Kill",width=6,align=">")
             string+="\n"
     return string
 
@@ -368,20 +356,20 @@ def toggle_auto_report(msg):
     server_settings[msg.server.id].toggle_auto_report()
     save_server_settings()
     #start thread for server
-    t = Timer(3, auto_report_trigger, args=(serv.server_id,))
+    t = Timer(3, auto_report_trigger, args=(msg.server.id,))
     t.daemon = True
     t.start()
-    t.name = serv.server_id
+    t.name = msg.server.id
     #print(serv.server_id)
     thread_list.append(t)
-    logging.info("Auto report set to "+str(server_settings[msg.server.id].auto_report)+"for server "+str(msg.server.id))
-    yield from client.send_message(msg.channel, "Auto Report mode is now set to "+str(server_settings[msg.server.id].auto_report)+".")
+    logging.info("Auto report set to {} for server {}".format(str(server_settings[msg.server.id].auto_report),str(msg.server.id)))
+    yield from client.send_message(msg.channel, "Auto Report mode is now set to {}.".format(str(server_settings[msg.server.id].auto_report)))
 
 def toggle_auto_report_mode(msg):
     global server_settings
     server_settings[msg.server.id].toggle_auto_report_mode()
     save_server_settings()
-    logging.info("Long auto report set to "+str(server_settings[msg.server.id].auto_report_mode_long)+" for server "+str(msg.server.id))
+    logging.info("Long auto report set to {} for server {}".format(str(server_settings[msg.server.id].auto_report_mode_long),str(msg.server.id)))
     yield from client.send_message(msg.channel, "Long Auto Report mode is now set to "+str(server_settings[msg.server.id].auto_report_mode_long)+".")
 
 def auto_report_trigger(serverID, refresh=True):
@@ -418,26 +406,26 @@ def auto_report_trigger(serverID, refresh=True):
                 serv_info.most_recent_log_end = reports[0].end
             else:
                 #need to update and edit report summary
-                logging.info("Update to newest log ("+str(reports[0].id)+") found for server "+str(serverID))
+                logging.info("Update to newest log ({}) found for server {}".format(str(reports[0].id),str(serverID)))
                 if(serv_info.auto_report_mode_long):
-                    string = report_summary_string_long(reports[0])
+                    embed = report_summary_embed_long(reports[0])
                 else:
-                    string = report_summary_string(reports[0])
+                    embed = report_summary_embed(reports[0])
                 server = discord.utils.get(client.servers, id=serv_info.server_id)
                 channel = discord.utils.get(server.channels, id=serv_info.default_channel)
                 messageID = server_settings[serverID].most_recent_log_summary
-                report_queue.append((channel, report_url(reports[0].id)+"\n```"+string+"```", messageID)) #edit message messageID to be this info now
+                report_queue.append((channel, embed, messageID)) #edit message messageID to be this info now
         for r in reports[1:]:
             #ignore empty logs
             if(r.end - r.start > 1000):
-                logging.info("New log "+str(r.id)+" found for server "+str(serverID))
+                logging.info("New log {} found for server {}".format(str(r.id),str(serverID)))
                 if(serv_info.auto_report_mode_long):
-                    string = report_summary_string_long(r)
+                    embed = report_summary_embed_long(r)
                 else:
-                    string = report_summary_string(r)
+                    embed = report_summary_embed(r)
                 server = discord.utils.get(client.servers, id=serv_info.server_id)
                 channel = discord.utils.get(server.channels, id=serv_info.default_channel)
-                report_queue.append((channel, report_url(r.id)+"\n```"+string+"```", 0)) #0 for message id to edit - ie there is none
+                report_queue.append((channel, embed, 0)) #0 for message id to edit - ie there is none
         if(len(reports) >= 1 and (reports[len(reports)-1].end-reports[len(reports)-1].start > 1000)):
             serv_info.update_recent_log(reports[len(reports)-1].start,reports[len(reports)-1].end)
             server_settings[serverID] = serv_info
@@ -481,18 +469,6 @@ def startup_auto_report():
     logging.info("Auto report started")
     return timers
 
-def __test(code, msg, num):
-    global server_settings
-    global thread_list
-    # print("Threads:")
-    # for thread in thread_list:
-    #     print(thread.name)
-    #     print(str(thread.is_alive()))
-    if(code == 1):
-        server_settings[msg.server.id].most_recent_log_start = num
-    elif(code == 2):
-        server_settings[msg.server.id].most_recent_log_end = num
-
 @asyncio.coroutine
 def send_msg(channel, msg):
     yield from client.send_message(channel, msg)
@@ -506,16 +482,16 @@ def check_report_queue():
     while(len(report_queue)>0):
         rep = report_queue.popleft()
         if(rep[2]==0):
-            message = yield from client.send_message(rep[0], rep[1])
+            message = yield from client.send_message(rep[0], embed=rep[1])
         else:
             try:
                 message = yield from client.get_message(rep[0],rep[2])
             except discord.NotFound:
                 message = None
             if(message is None):
-                message = yield from client.send_message(rep[0], rep[1])
+                message = yield from client.send_message(rep[0], embed=rep[1])
             else:
-                message = yield from client.edit_message(message, rep[1])
+                message = yield from client.edit_message(message, embed=rep[1])
         server_settings[message.server.id].most_recent_log_summary = message.id
     asyncio.ensure_future(check_report_queue())
 
@@ -533,7 +509,7 @@ def check_server_memberships():
     asyncio.ensure_future(check_server_memberships())
 
 def report_url(reportID):
-    return "https://www.warcraftlogs.com/reports/"+reportID+"/"
+    return "https://www.warcraftlogs.com/reports/{}/".format(reportID)
 
 def table_command(msg):
     global current_key
@@ -602,12 +578,20 @@ def table_command(msg):
         bossname = "ALL"
 
     if(view is None):
-        yield from client.send_message(msg.channel, "Please provied a view (damage-done, damage-taken, healing).")
+        yield from client.send_message(msg.channel, "Please provide a view (damage-done, damage-taken, healing).")
+        return
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime)
+    table.sort(key=lambda x: -x.total)
     logging.info("Requested "+view+" table from report "+str(report.id)+" for server "+str(msg.server.id))
-    string = "*"+view.upper()+"* "+bossname+" - "+report.id+"\n" + table_string(table, length)
-    yield from client.send_message(msg.channel, "```"+string+"```")
-    return string
+    embed = discord.Embed()
+    embed.title = "**{0}** {1:<100}{2}".format(view.upper(), bossname, "|")
+    embed.set_footer(text="Taken from report "+report.id)
+    embed.add_field(name="Top {} values".format(length),
+                    value="```{}```".format(table_string(table, length)),
+                    inline=False)
+    embed.color = discord.Colour(colour_map(table[0].type))
+    yield from client.send_message(msg.channel, embed=embed)
+    return embed
 
 def char_command(msg):
     global current_key
@@ -621,6 +605,7 @@ def char_command(msg):
     starttime = 0
     endtime = 0
     target_mode = False
+    charcolor = 0xFFFFFF
     for arg in args:
         if(arg.lower().startswith("view=")):
             if(arg.lower() == "view=dps"):
@@ -654,6 +639,7 @@ def char_command(msg):
     char=attendance_list[0]
     for player in attendance_list:
         if(charname in player.name.lower()):
+            charcolor = colour_map(player.type)
             char = player
             break
     charname = player.name.lower()
@@ -697,16 +683,22 @@ def char_command(msg):
         bossname = "ALL"
 
     if(view is None):
-        yield from client.send_message(msg.channel, "Please provied a view (damage-done, damage-taken, healing).")
+        yield from client.send_message(msg.channel, "Please provide a view (damage-done, damage-taken, healing).")
+        return
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime, sourceid=char.id)
-    logging.info("Requested "+view+" table for "+charname+" from report "+str(report.id)+" for server "+str(msg.server.id))
+    logging.info("Requested {} table for {} from report {} for server {}".format(view,charname,str(report.id),str(msg.server.id)))
     total = 0
     for entry in table:
         total += entry.total
-
-    string = "*"+charname.upper()+" "+view.upper()+"* "+bossname+" - "+report.id+"\n" + table_string(table, length, total=total)
-    yield from client.send_message(msg.channel, "```"+string+"```")
-    return string
+    embed = discord.Embed()
+    embed.title = "**{0} {1}** {2:<90}{3}".format(charname.upper(), view.upper(), bossname, "|")
+    embed.set_footer(text="Taken from report "+report.id)
+    embed.add_field(name="Abilities",
+                    value="```{}```".format(table_string(table, length, total=total)),
+                    inline=False)
+    embed.colour=discord.Colour(charcolor)
+    yield from client.send_message(msg.channel, embed=embed)
+    return embed
 
 def att_command(msg):
     global current_key
@@ -733,13 +725,11 @@ def att_command(msg):
                                                       server_settings[msg.server.id].guild_region, 
                                                       key=current_key)
     logging.info("Requested guild reports for server "+str(msg.server.id))
-    full_report_list.reverse()
     for rep in full_report_list:
         if rep.zone == -1:
             full_report_list.remove(rep)
     report_days=""
     for i in range((page-1)*(page_range),(page*page_range)):
-        print(str(page)+" "+str(i))
         report = full_report_list[i]
         report_days += datetime.datetime.fromtimestamp((report.start/1000)-18000).strftime('%a')[0]
         fightlist=pcl.generate_fight_list(report.id, key=current_key)
@@ -754,17 +744,21 @@ def att_command(msg):
     attendance_rows.sort(key=lambda x: x[0])
     attendance_rows.sort(key=lambda x: x[2])
     attendance_rows.reverse()
-    for row in attendance_rows:
-        print(row[0]+" "+str(row[2]))
+    # for row in attendance_rows:
+    #     print(row[0]+" "+str(row[2]))
     if(length==0):length=len(attendance_rows)
 
     startdate = datetime.datetime.fromtimestamp((full_report_list[(page-1)*(page_range)].start/1000)-18000).strftime('%Y-%m-%d')
     enddate = datetime.datetime.fromtimestamp((full_report_list[(page)*(page_range)].start/1000)-18000).strftime('%Y-%m-%d')
-    title = "*ATTENDANCE CHART FROM " + startdate + " TO " + enddate + "*\n"
-    title += "NAME           | % |"+report_days.upper()+"\n"
-    string = title+attendance_table_string(attendance_rows,length)
-    yield from client.send_message(msg.channel, "```"+string+"```")
-    return string
+    embed = discord.Embed()
+    embed.title = "{0:<100}|".format("Attendance Chart")
+    embed.set_footer(text=startdate+" to "+enddate)
+    headers = "NAME           | % |"+report_days.upper()+"\n"
+    embed.add_field(name="Table for last {} raids".format(page_range),
+                    value="```"+headers+attendance_table_string(attendance_rows,length)+"```",
+                    inline=False)
+    yield from client.send_message(msg.channel, embed=embed)
+    return embed
 
 def searchable(string):
     for char in string:
@@ -816,6 +810,164 @@ def attendance_table_string_row(table_entry):
         else: format_str+="X"
     return format_str
 
+def help_command(message):
+    yield from client.send_message(message.channel, help_msg)
+
+def setup_command(message):
+    yield from client.send_message(message.channel, setup_help_msg)
+
+def commands_command(message):
+    if(message.channel.is_private):
+        yield from client.send_message(message.channel, command_list_msg)
+    else:
+        yield from client.send_message(message.author, command_list_msg)
+
+def report_command(message):
+    yield from client.send_typing(message.channel)
+    if(len(message.content.split(" ")) < 2): 
+        embed = report_summary_embed_long(most_recent_report(message.server.id))
+    else: 
+        report = message.content.split(" ")[1]
+        embed = report_summary_embed_long(get_report(report))
+    yield from client.send_message(message.channel,  embed=embed)
+
+def fights_command(message):
+    if(len(message.content.split(" ")) < 2): report = most_recent_report(message.server.id).id
+    else: report = message.content.split(" ")[1]
+    fightlist = pcl.generate_fight_list(report, key=current_key)
+    string = fight_list_string_long(fightlist)
+    logging.info("Requested fight list for report "+report)
+    embed = report_summary_embed(get_report(report))
+    embed.add_field(name="Pulls logged in last report",
+                    value="```"+string+"```",
+                    inline=False)
+    difficulty=0
+    for fight in fightlist:
+        if hasattr(fight, "difficulty"):
+            difficulty=max(difficulty, fight.difficulty)
+    embed.colour = discord.Colour(colour_map(get_difficulty(difficulty)))
+    yield from client.send_message(message.channel, embed=embed)
+
+def check_command(message):
+    yield from client.send_message(message.channel, "Checking for updates...")
+    auto_report_trigger(message.server.id, refresh=False)
+
+def colour_map(key):
+    if key in class_colors:
+        return class_colors[key]
+    if key in difficulty_colors:
+        return difficulty_colors[key]
+    else:
+        #Default color
+        return 0x979c9f
+
+command_set = [
+    {
+        "commands":["initialize","init","i"],
+        "function": initialize_new_server,
+        "allow_private": False,
+        "admin_only": False,
+        "require_initialized": False,
+    },
+    {
+        "commands":["help"],
+        "function": help_command,
+        "allow_private": True,
+        "admin_only": False,
+        "require_initialized": False,
+    },
+    {
+        "commands":["setup"],
+        "function": setup_command,
+        "allow_private": True,
+        "admin_only": False,
+        "require_initialized": False,
+    },
+    {
+        "commands":["commands"],
+        "function": commands_command,
+        "allow_private": True,
+        "admin_only": False,
+        "require_initialized": False,
+    },
+    {
+        "commands":["guild"],
+        "function": update_server_guild_info,
+        "allow_private": False,
+        "admin_only": True,
+        "require_initialized": True,
+    },
+    {
+        "commands":["channel"],
+        "function": update_server_default_channel,
+        "allow_private": False,
+        "admin_only": True,
+        "require_initialized": True,
+    },
+    {
+        "commands":["att", "attendance"],
+        "function": att_command,
+        "allow_private": False,
+        "admin_only": False,
+        "require_initialized": True,
+    },
+    {
+        "commands":["admin"],
+        "function": add_server_admin,
+        "allow_private": False,
+        "admin_only": True,
+        "require_initialized": True,
+    },
+    {
+        "commands":["report"],
+        "function": report_command,
+        "allow_private": False,
+        "admin_only": False,
+        "require_initialized": True,
+    },
+    {
+        "commands":["fights","fight"],
+        "function": fights_command,
+        "allow_private": False,
+        "admin_only": False,
+        "require_initialized": True,
+    },
+    {
+        "commands":["auto"],
+        "function": toggle_auto_report,
+        "allow_private": False,
+        "admin_only": True,
+        "require_initialized": True,
+    },
+    {
+        "commands":["longmode","long"],
+        "function": toggle_auto_report_mode,
+        "allow_private": False,
+        "admin_only": True,
+        "require_initialized": True,
+    },
+    {
+        "commands":["check"],
+        "function": check_command,
+        "allow_private": False,
+        "admin_only": True,
+        "require_initialized": True,
+    },
+    {
+        "commands":["table","tbl"],
+        "function": table_command,
+        "allow_private": False,
+        "admin_only": False,
+        "require_initialized": True,
+    },
+    {
+        "commands":["char"],
+        "function": char_command,
+        "allow_private": False,
+        "admin_only": False,
+        "require_initialized": True,
+    },
+]
 
 current_key = get_key("warcraftlogs_public_key")
 discord_token = get_key("discord_bot_token")
