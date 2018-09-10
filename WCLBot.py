@@ -586,9 +586,7 @@ def table_command(msg):
     embed = discord.Embed()
     embed.title = "**{0}** {1:<100}{2}".format(view.upper(), bossname, "|")
     embed.set_footer(text="Taken from report "+report.id)
-    embed.add_field(name="Top {} values".format(length),
-                    value="```{}```".format(table_string(table, length)),
-                    inline=False)
+    embed.description="```{}```".format(table_string(table, length))
     embed.color = discord.Colour(colour_map(table[0].type))
     yield from client.send_message(msg.channel, embed=embed)
     return embed
@@ -693,9 +691,7 @@ def char_command(msg):
     embed = discord.Embed()
     embed.title = "**{0} {1}** {2:<90}{3}".format(charname.upper(), view.upper(), bossname, "|")
     embed.set_footer(text="Taken from report "+report.id)
-    embed.add_field(name="Abilities",
-                    value="```{}```".format(table_string(table, length, total=total)),
-                    inline=False)
+    embed.description="```{}```".format(table_string(table, length, total=total))
     embed.colour=discord.Colour(charcolor)
     yield from client.send_message(msg.channel, embed=embed)
     return embed
@@ -754,9 +750,7 @@ def att_command(msg):
     embed.title = "{0:<100}|".format("Attendance Chart")
     embed.set_footer(text=startdate+" to "+enddate)
     headers = "NAME           | % |"+report_days.upper()+"\n"
-    embed.add_field(name="Table for last {} raids".format(page_range),
-                    value="```"+headers+attendance_table_string(attendance_rows,length)+"```",
-                    inline=False)
+    embed.description="```{}{}```".format(headers,attendance_table_string(attendance_rows,length))
     yield from client.send_message(msg.channel, embed=embed)
     return embed
 
@@ -838,9 +832,7 @@ def fights_command(message):
     string = fight_list_string_long(fightlist)
     logging.info("Requested fight list for report "+report)
     embed = report_summary_embed(get_report(report))
-    embed.add_field(name="Pulls logged in last report",
-                    value="```"+string+"```",
-                    inline=False)
+    embed.description="```"+string+"```"
     difficulty=0
     for fight in fightlist:
         if hasattr(fight, "difficulty"):
