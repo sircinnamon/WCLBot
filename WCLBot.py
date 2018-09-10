@@ -23,7 +23,7 @@ server_settings = dict()
 thread_list = list()
 report_queue = deque()
 
-CMD_PREFIX = "/w"
+CMD_PREFIX = "!w"
 serv_not_registered_msg =   ("""```Whoops! This server is not yet registered. Please have your server admin use the !winitialize command (!whelp for more info)!```""")
 help_msg =                  ("""```Hello! I'm Weasel the WarcraftLogs API Discord bot! I can be used to view logs at a glance, track attendance, brag about parses and more! For help with setup, type '!wsetup'. For a full command list, type '!wcommands'. I was created by sircinnamon@gmail.com.```""")
 setup_help_msg =            ("""```If you are an admin, start by typing '!winitialize' to add your server to the registry. This will allow you to use the bot. To set up automatic log tracking, first type '!wguild <guildname> <realm>-<region>'. To enable automatic log reporting, type '!wautolog'. To enable long form reporting, type '!wlonglog'. To change the channel the bot posts in, type '!wchannel' in a channel the bot can view. To allow others to change these settings, type '!wadmin' followed by an @ to all the desired users.```""")
