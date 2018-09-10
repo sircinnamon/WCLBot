@@ -48,6 +48,8 @@ command_list_msg =          ("""```Here are the available commands. Some argumen
 private_message_warning =   ("""\n`Sorry, only help messages can be whispered. Other private messages are not supported. Try !wcommands.`""")
 admin_only_warning =   ("""\n`Sorry, only admins can execute that command.`""")
 
+server_settings_file = "data/server_settings.pkl"
+
 @client.event
 @asyncio.coroutine
 def on_ready():
@@ -177,14 +179,14 @@ def add_server_admin(msg):
 
 def save_server_settings():
     global server_settings
-    pkl_file = open('data/server_settings.pkl', 'wb')
+    pkl_file = open(server_settings_file, 'wb')
     pickle.dump(server_settings, pkl_file)
     pkl_file.close()
 
 def load_server_settings():
     global server_settings
-    if(os.path.isfile('data/server_settings.pkl') == True):
-        pkl_file = open('data/server_settings.pkl', 'rb')
+    if(os.path.isfile(server_settings_file) == True):
+        pkl_file = open(server_settings_file, 'rb')
         server_settings = pickle.load(pkl_file)
         pkl_file.close()
 
