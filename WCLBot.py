@@ -50,6 +50,28 @@ admin_only_warning =   ("""\n`Sorry, only admins can execute that command.`""")
 
 server_settings_file = "data/server_settings.pkl"
 
+class_colors = {
+    "DeathKnight":0xC41F3B,
+    "DemonHunter":0xA330C9,
+    "Druid":0xFF7D0A,
+    "Hunter":0xABD473,
+    "Mage":0x40C7EB,
+    "Monk":0x00FF96,
+    "Paladin":0xF58CBA,
+    "Priest":0xFFFFFF,
+    "Rogue":0xFFF569,
+    "Shaman":0x0070DE,
+    "Warlock":0x8787ED,
+    "Warrior":0xC79C6E
+}
+
+difficulty_colors = {
+    "LFR":0x1eff00,
+    "Normal":0x0070dd,
+    "Heroic":0xa335ee,
+    "Mythic":0xff8000,
+}
+
 @client.event
 @asyncio.coroutine
 def on_ready():
@@ -205,8 +227,7 @@ def get_key(key_name):
 def report_summary_embed(report):
     date = datetime.datetime.fromtimestamp((report.start/1000)-18000).strftime('%Y-%m-%d')
     embed = discord.Embed()
-    embed.title = "{0}   -   {1}".format(report.title, str(report.id))
-    embed.title = "**{0:<40}** {1:>50}".format(report.title, "("+str(report.id)+")")
+    embed.title = "**{0:<70}** {1:>20}".format(report.title, "("+str(report.id)+")")
     embed.url="https://www.warcraftlogs.com/reports/"+str(report.id)
     embed.set_footer(text="Report uploaded by {} on {}".format(report.owner,date))
     return embed
@@ -236,6 +257,11 @@ def report_summary_embed_long(report):
     except ValueError as ex:
         # print("Val Error: "+str(ValueError))
         logging.warning("Val Error: "+str(ex)+"-"+str(ex.args))
+    difficulty=0
+    for fight in fightlist:
+        if hasattr(fight, "difficulty"):
+            difficulty=max(difficulty, fight.difficulty)
+    embed.colour = discord.Colour(colour_map(get_difficulty(difficulty)))
     return embed
 
 def table_string(table, length, name_width=18, total=0):
@@ -552,15 +578,18 @@ def table_command(msg):
         bossname = "ALL"
 
     if(view is None):
-        yield from client.send_message(msg.channel, "Please provied a view (damage-done, damage-taken, healing).")
+        yield from client.send_message(msg.channel, "Please provide a view (damage-done, damage-taken, healing).")
+        return
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime)
+    table.sort(key=lambda x: -x.total)
     logging.info("Requested "+view+" table from report "+str(report.id)+" for server "+str(msg.server.id))
     embed = discord.Embed()
-    embed.title = "**{0}** {1:<30}{2:>70}".format(view.upper(), bossname, "|")
+    embed.title = "**{0}** {1:<100}{2}".format(view.upper(), bossname, "|")
     embed.set_footer(text="Taken from report "+report.id)
     embed.add_field(name="Top {} values".format(length),
                     value="```{}```".format(table_string(table, length)),
                     inline=False)
+    embed.color = discord.Colour(colour_map(table[0].type))
     yield from client.send_message(msg.channel, embed=embed)
     return embed
 
@@ -576,6 +605,7 @@ def char_command(msg):
     starttime = 0
     endtime = 0
     target_mode = False
+    charcolor = 0xFFFFFF
     for arg in args:
         if(arg.lower().startswith("view=")):
             if(arg.lower() == "view=dps"):
@@ -609,6 +639,7 @@ def char_command(msg):
     char=attendance_list[0]
     for player in attendance_list:
         if(charname in player.name.lower()):
+            charcolor = colour_map(player.type)
             char = player
             break
     charname = player.name.lower()
@@ -652,18 +683,20 @@ def char_command(msg):
         bossname = "ALL"
 
     if(view is None):
-        yield from client.send_message(msg.channel, "Please provied a view (damage-done, damage-taken, healing).")
+        yield from client.send_message(msg.channel, "Please provide a view (damage-done, damage-taken, healing).")
+        return
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime, sourceid=char.id)
     logging.info("Requested {} table for {} from report {} for server {}".format(view,charname,str(report.id),str(msg.server.id)))
     total = 0
     for entry in table:
         total += entry.total
     embed = discord.Embed()
-    embed.title = "**{0} {1}** {2:<30}{3:>60}".format(charname.upper(), view.upper(), bossname, "|")
+    embed.title = "**{0} {1}** {2:<90}{3}".format(charname.upper(), view.upper(), bossname, "|")
     embed.set_footer(text="Taken from report "+report.id)
     embed.add_field(name="Abilities",
                     value="```{}```".format(table_string(table, length, total=total)),
                     inline=False)
+    embed.colour=discord.Colour(charcolor)
     yield from client.send_message(msg.channel, embed=embed)
     return embed
 
@@ -697,7 +730,6 @@ def att_command(msg):
             full_report_list.remove(rep)
     report_days=""
     for i in range((page-1)*(page_range),(page*page_range)):
-        print(str(page)+" "+str(i))
         report = full_report_list[i]
         report_days += datetime.datetime.fromtimestamp((report.start/1000)-18000).strftime('%a')[0]
         fightlist=pcl.generate_fight_list(report.id, key=current_key)
@@ -712,14 +744,14 @@ def att_command(msg):
     attendance_rows.sort(key=lambda x: x[0])
     attendance_rows.sort(key=lambda x: x[2])
     attendance_rows.reverse()
-    for row in attendance_rows:
-        print(row[0]+" "+str(row[2]))
+    # for row in attendance_rows:
+    #     print(row[0]+" "+str(row[2]))
     if(length==0):length=len(attendance_rows)
 
     startdate = datetime.datetime.fromtimestamp((full_report_list[(page-1)*(page_range)].start/1000)-18000).strftime('%Y-%m-%d')
     enddate = datetime.datetime.fromtimestamp((full_report_list[(page)*(page_range)].start/1000)-18000).strftime('%Y-%m-%d')
     embed = discord.Embed()
-    embed.title = "{0:=^50}".format("ATTENDANCE CHART")
+    embed.title = "{0:<100}|".format("Attendance Chart")
     embed.set_footer(text=startdate+" to "+enddate)
     headers = "NAME           | % |"+report_days.upper()+"\n"
     embed.add_field(name="Table for last {} raids".format(page_range),
@@ -802,17 +834,32 @@ def report_command(message):
 def fights_command(message):
     if(len(message.content.split(" ")) < 2): report = most_recent_report(message.server.id).id
     else: report = message.content.split(" ")[1]
-    string = fight_list_string_long(pcl.generate_fight_list(report, key=current_key))
+    fightlist = pcl.generate_fight_list(report, key=current_key)
+    string = fight_list_string_long(fightlist)
     logging.info("Requested fight list for report "+report)
     embed = report_summary_embed(get_report(report))
     embed.add_field(name="Pulls logged in last report",
                     value="```"+string+"```",
                     inline=False)
+    difficulty=0
+    for fight in fightlist:
+        if hasattr(fight, "difficulty"):
+            difficulty=max(difficulty, fight.difficulty)
+    embed.colour = discord.Colour(colour_map(get_difficulty(difficulty)))
     yield from client.send_message(message.channel, embed=embed)
 
 def check_command(message):
     yield from client.send_message(message.channel, "Checking for updates...")
     auto_report_trigger(message.server.id, refresh=False)
+
+def colour_map(key):
+    if key in class_colors:
+        return class_colors[key]
+    if key in difficulty_colors:
+        return difficulty_colors[key]
+    else:
+        #Default color
+        return 0x979c9f
 
 command_set = [
     {
