@@ -72,6 +72,9 @@ difficulty_colors = {
     "Mythic":0xff8000,
 }
 
+zone_image_url="https://dmszsuqyoe6y6.cloudfront.net/img/warcraft/zones/zone-{}-small.jpg"
+boss_image_url="https://dmszsuqyoe6y6.cloudfront.net/img/warcraft/bosses/{}-icon.jpg"
+
 @client.event
 @asyncio.coroutine
 def on_ready():
@@ -262,6 +265,7 @@ def report_summary_embed_long(report):
         if hasattr(fight, "difficulty"):
             difficulty=max(difficulty, fight.difficulty)
     embed.colour = discord.Colour(colour_map(get_difficulty(difficulty)))
+    embed.set_thumbnail(url=zone_image_url.format(report.zone))
     return embed
 
 def table_string(table, length, name_width=18, total=0):
@@ -521,6 +525,7 @@ def table_command(msg):
     length = 20
     starttime = 0
     endtime = 0
+    bossid = 0 #0=all
     for arg in args:
         if(arg.lower().startswith("view=")):
             if(arg.lower() == "view=dps"):
@@ -553,6 +558,7 @@ def table_command(msg):
                     starttime = f.start_time
                     endtime = f.end_time
                     bossname = f.name.upper()
+                    bossid = f.boss
         else:
             #Assume its a bossname and get kill or latest attempt
             searchkey = searchable(fight.lower())
@@ -565,6 +571,7 @@ def table_command(msg):
                     starttime = f.start_time
                     endtime = f.end_time
                     bossname = f.name.upper()
+                    bossid = f.boss
                     found = True
                     break
             if(not found):
@@ -573,6 +580,7 @@ def table_command(msg):
                         starttime = f.start_time
                         endtime = f.end_time
                         bossname = f.name.upper()
+                        bossid = f.boss
                         break
     else:
         bossname = "ALL"
@@ -588,6 +596,10 @@ def table_command(msg):
     embed.set_footer(text="Taken from report "+report.id)
     embed.description="```{}```".format(table_string(table, length))
     embed.color = discord.Colour(colour_map(table[0].type))
+    if(bossid==0):
+        embed.set_thumbnail(url=zone_image_url.format(report.zone))
+    else:
+        embed.set_thumbnail(url=boss_image_url.format(bossid))
     yield from client.send_message(msg.channel, embed=embed)
     return embed
 
@@ -604,6 +616,7 @@ def char_command(msg):
     endtime = 0
     target_mode = False
     charcolor = 0xFFFFFF
+    bossid = 0 #0=all
     for arg in args:
         if(arg.lower().startswith("view=")):
             if(arg.lower() == "view=dps"):
@@ -652,6 +665,7 @@ def char_command(msg):
                     starttime = f.start_time
                     endtime = f.end_time
                     bossname = f.name.upper()
+                    bossid = f.boss
         else:
             #Assume its a bossname and get kill or latest attempt from chars attended fights
             attended_fights = list()
@@ -668,6 +682,7 @@ def char_command(msg):
                     starttime = f.start_time
                     endtime = f.end_time
                     bossname = f.name.upper()
+                    bossid = f.boss
                     found = True
                     break
             if(not found):
@@ -676,6 +691,7 @@ def char_command(msg):
                         starttime = f.start_time
                         endtime = f.end_time
                         bossname = f.name.upper()
+                        bossid = f.boss
                         break
     else:
         bossname = "ALL"
@@ -693,6 +709,10 @@ def char_command(msg):
     embed.set_footer(text="Taken from report "+report.id)
     embed.description="```{}```".format(table_string(table, length, total=total))
     embed.colour=discord.Colour(charcolor)
+    if(bossid==0):
+        embed.set_thumbnail(url=zone_image_url.format(report.zone))
+    else:
+        embed.set_thumbnail(url=boss_image_url.format(bossid))
     yield from client.send_message(msg.channel, embed=embed)
     return embed
 
@@ -831,13 +851,16 @@ def fights_command(message):
     fightlist = pcl.generate_fight_list(report, key=current_key)
     string = fight_list_string_long(fightlist)
     logging.info("Requested fight list for report "+report)
-    embed = report_summary_embed(get_report(report))
+    report_obj = get_report(report)
+    embed = report_summary_embed(report_obj)
     embed.description="```"+string+"```"
     difficulty=0
     for fight in fightlist:
         if hasattr(fight, "difficulty"):
             difficulty=max(difficulty, fight.difficulty)
     embed.colour = discord.Colour(colour_map(get_difficulty(difficulty)))
+    print(zone_image_url.format(report_obj.zone))
+    embed.set_thumbnail(url=zone_image_url.format(report_obj.zone))
     yield from client.send_message(message.channel, embed=embed)
 
 def check_command(message):
