@@ -93,6 +93,7 @@ def on_ready():
     thread_list = startup_auto_report()
     asyncio.ensure_future(check_report_queue())
     asyncio.ensure_future(check_server_memberships())
+    yield from client.change_presence(game=discord.Game(name='WarcraftLogs'))
 
 @client.event
 @asyncio.coroutine
