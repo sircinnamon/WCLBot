@@ -403,6 +403,7 @@ def auto_report_trigger(serverID, refresh=True):
                                                  serv_info.guild_region, 
                                                  start=serv_info.most_recent_log_start,
                                                  key=current_key)
+        reports.reverse()
         logging.info("Requested guild reports for server "+str(serverID))
         if(len(reports)>0 and reports[0].end > serv_info.most_recent_log_end):
             if(serv_info.most_recent_log_end == 0):
@@ -437,18 +438,22 @@ def auto_report_trigger(serverID, refresh=True):
     except HTTPError as ex:
         # print("HTTP Error: "+str(HTTPError))
         logging.warning("HTTP Error: "+str(ex)+"-"+str(ex.args))
+        print("HTTP Error: "+str(ex)+"-"+str(ex.args))
     except KeyError as ex:
         # print("Key Error: "+str(KeyError))
         logging.warning("Key Error: "+str(ex)+"-"+str(ex.args))
+        print("Key Error: "+str(ex)+"-"+str(ex.args))
     except ValueError as ex:
         # print("Val Error: "+str(ValueError))
         logging.warning("Val Error: "+str(ex)+"-"+str(ex.args))
+        print("Val Error: "+str(ex)+"-"+str(ex.args))
     except Exception as ex:
         # print("Unexpected error")
         # print(type(ex))
         # print(ex.args)
         # print(str(ex))
         logging.warning("Unexpected error\n"+str(type(ex))+"\n"+str(ex.args)+"\n"+str(ex))
+        print("Unexpected error\n"+str(type(ex))+"\n"+str(ex.args)+"\n"+str(ex))
 
     #trigger timer for next auto check
     if(refresh):
@@ -740,6 +745,7 @@ def att_command(msg):
                                                       server_settings[msg.server.id].guild_realm, 
                                                       server_settings[msg.server.id].guild_region, 
                                                       key=current_key)
+    full_report_list.reverse()
     logging.info("Requested guild reports for server "+str(msg.server.id))
     for rep in full_report_list:
         if rep.zone == -1:
@@ -867,6 +873,10 @@ def check_command(message):
     yield from client.send_message(message.channel, "Checking for updates...")
     auto_report_trigger(message.server.id, refresh=False)
 
+def debug_command(message):
+    global server_settings
+    yield from client.send_message(message.channel, "```"+str(server_settings[message.server.id])+"```")
+
 def colour_map(key):
     if key in class_colors:
         return class_colors[key]
@@ -980,6 +990,13 @@ command_set = [
         "function": char_command,
         "allow_private": False,
         "admin_only": False,
+        "require_initialized": True,
+    },
+    {
+        "commands":["debug"],
+        "function": debug_command,
+        "allow_private": False,
+        "admin_only": True,
         "require_initialized": True,
     },
 ]
