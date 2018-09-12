@@ -556,6 +556,31 @@ def parse_message_args(message):
         args[key]=val
     return args
 
+def search_fights(searchkey, fightlist, char=None):
+    #If char given then limit to that chars attended fights
+    if(char is not None):
+        attended_fights = list()
+        for f in fightlist:
+            if(char.attended(f.id)):
+                attended_fights.append(f)
+        fightlist = attended_fights
+    if(searchkey.isdigit()):
+        #Assume its a fight id
+        for f in fightlist:
+            if(f.id == int(searchkey)):
+                return f
+        return None
+    #Assume its a bossname and get kill or latest attempt
+    searchkey = searchable(searchkey.lower())
+    fightlist.reverse()
+    found = False
+    for f in fightlist:
+        if(f.boss!=0 and f.kill and (searchkey in f.name.lower() or searchkey in searchable(f.name.lower()))):
+            return f
+    for f in fightlist:
+        if(searchkey in f.name.lower() or searchkey in searchable(f.name.lower())):
+            return f
+    return None
 
 def table_command(msg):
     global current_key
@@ -576,47 +601,22 @@ def table_command(msg):
     endtime=report.end-report.start
     if(fight!="all"):
         bossname=None
-        fightlist=pcl.generate_fight_list(report.id, key=current_key)
         logging.info("Requested fight list for report "+report.id)
-        if(fight.isdigit()):
-            #Assume its a fight id
-            for f in fightlist:
-                if(f.id == int(fight)):
-                    starttime = f.start_time
-                    endtime = f.end_time
-                    bossname = f.name.upper()
-                    bossid = f.boss
+        fightlist=pcl.generate_fight_list(report.id, key=current_key)
+        fight_obj = search_fights(fight, fightlist)
+        if(fight_obj is not None):
+            starttime = fight_obj.start_time
+            endtime = fight_obj.end_time
+            bossname = fight_obj.name.upper()
+            bossid = fight_obj.boss
         else:
-            #Assume its a bossname and get kill or latest attempt
-            searchkey = searchable(fight.lower())
-            fightlist.reverse()
-            found = False
-            for f in fightlist:
-                if(isinstance(f, pcl.TrashFight)):
-                    pass
-                elif(f.kill and (searchkey in f.name.lower() or searchkey in searchable(f.name.lower()))):
-                    starttime = f.start_time
-                    endtime = f.end_time
-                    bossname = f.name.upper()
-                    bossid = f.boss
-                    found = True
-                    break
-            if(not found):
-                for f in fightlist:
-                    if(searchkey in f.name.lower() or searchkey in searchable(f.name.lower())):
-                        starttime = f.start_time
-                        endtime = f.end_time
-                        bossname = f.name.upper()
-                        bossid = f.boss
-                        break
+            yield from client.send_message(msg.channel, "`Please provide a valid fight name or ID.`")
+            return
     else:
         bossname = "ALL"
 
     if(view is None):
         yield from client.send_message(msg.channel, "`Please provide a view (damage-done, damage-taken, healing).`")
-        return
-    if(bossname is None):
-        yield from client.send_message(msg.channel, "`Please provide a valid boss name.`")
         return
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime)
     embed = discord.Embed()
@@ -682,48 +682,18 @@ def char_command(msg):
 
 
     if(fight!="all"):
-        bossname = None
-        if(fight.isdigit()):
-            #Assume its a fight id
-            for f in fightlist:
-                if(f.id == int(fight)):
-                    starttime = f.start_time
-                    endtime = f.end_time
-                    bossname = f.name.upper()
-                    bossid = f.boss
+        fight_obj = search_fights(fight, fightlist, char=char)
+        if(fight_obj is not None):
+            starttime = fight_obj.start_time
+            endtime = fight_obj.end_time
+            bossname = fight_obj.name.upper()
+            bossid = fight_obj.boss
         else:
-            #Assume its a bossname and get kill or latest attempt from chars attended fights
-            attended_fights = list()
-            for f in fightlist:
-                if(char.attended(f.id)):
-                    attended_fights.append(f)
-            fightlist = attended_fights
-
-            searchkey = searchable(fight.lower())
-            fightlist.reverse()
-            found = False
-            for f in fightlist:
-                if(f.boss!=0 and f.kill and (searchkey in f.name.lower() or searchkey in searchable(f.name.lower()))):
-                    starttime = f.start_time
-                    endtime = f.end_time
-                    bossname = f.name.upper()
-                    bossid = f.boss
-                    found = True
-                    break
-            if(not found):
-                for f in fightlist:
-                    if(searchkey in f.name.lower() or searchkey in searchable(f.name.lower())):
-                        starttime = f.start_time
-                        endtime = f.end_time
-                        bossname = f.name.upper()
-                        bossid = f.boss
-                        break
+            yield from client.send_message(msg.channel, "`Please provide a valid fight name or ID (Did {} attend that fight?).`".format(player.name))
+            return
     else:
         bossname = "ALL"
 
-    if(bossname is None):
-        yield from client.send_message(msg.channel, "`Please provide a valid boss name (Did {} attend that fight?).`".format(player.name))
-        return
     if(view is None):
         yield from client.send_message(msg.channel, "`Please provide a view (damage-done, damage-taken, healing).`")
         return
