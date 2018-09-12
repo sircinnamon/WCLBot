@@ -568,6 +568,7 @@ def table_command(msg):
         logging.info("Requested report "+report.id)
     endtime=report.end-report.start
     if(fight!="all"):
+        bossname=None
         fightlist=pcl.generate_fight_list(report.id, key=current_key)
         logging.info("Requested fight list for report "+report.id)
         if(fight.isdigit()):
@@ -606,6 +607,9 @@ def table_command(msg):
 
     if(view is None):
         yield from client.send_message(msg.channel, "`Please provide a view (damage-done, damage-taken, healing).`")
+        return
+    if(bossname is None):
+        yield from client.send_message(msg.channel, "`Please provide a valid boss name.`")
         return
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime)
     embed = discord.Embed()
@@ -691,7 +695,7 @@ def char_command(msg):
 
 
     if(fight!="all"):
-        bossname = "err" 
+        bossname = None
         if(fight.isdigit()):
             #Assume its a fight id
             for f in fightlist:
@@ -730,6 +734,9 @@ def char_command(msg):
     else:
         bossname = "ALL"
 
+    if(bossname is None):
+        yield from client.send_message(msg.channel, "`Please provide a valid boss name (Did {} attend that fight?).`".format(player.name))
+        return
     if(view is None):
         yield from client.send_message(msg.channel, "`Please provide a view (damage-done, damage-taken, healing).`")
         return
