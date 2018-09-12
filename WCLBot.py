@@ -612,7 +612,10 @@ def table_command(msg):
     logging.info("Requested "+view+" table from report "+str(report.id)+" for server "+str(msg.server.id))
     embed.title = "**{0}** {1:<100}{2}".format(view.upper(), bossname, "|")
     embed.set_footer(text="Taken from report "+report.id)
-    if(view in ["damage-done", "damage-taken", "healing", "summons", "casts"]):
+    if(len(table)==0):
+        embed.description="```{}```".format("No results found!")
+        embed.color = discord.Colour.red()
+    elif(view in ["damage-done", "damage-taken", "healing", "summons", "casts"]):
         # "Total-able" sortable views
         table.sort(key=lambda x: -x.total)
         embed.description="```{}```".format(table_string(table, length))
@@ -733,7 +736,9 @@ def char_command(msg):
     embed = discord.Embed()
     embed.title = "**{0} {1}** {2:<90}{3}".format(charname.upper(), view.upper(), bossname, "|")
     embed.set_footer(text="Taken from report "+report.id)
-    if(view in ["damage-done", "damage-taken", "healing", "summons", "casts"]):
+    if(len(table)==0):
+        embed.description="```{}```".format("No results found!")
+    elif(view in ["damage-done", "damage-taken", "healing", "summons", "casts"]):
         # "Total-able" sortable views
         for entry in table:
             total += entry.total
