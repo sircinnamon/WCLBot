@@ -594,13 +594,17 @@ def table_command(msg):
         yield from client.send_message(msg.channel, "Please provide a view (damage-done, damage-taken, healing).")
         return
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime)
-    table.sort(key=lambda x: -x.total)
-    logging.info("Requested "+view+" table from report "+str(report.id)+" for server "+str(msg.server.id))
     embed = discord.Embed()
+    logging.info("Requested "+view+" table from report "+str(report.id)+" for server "+str(msg.server.id))
     embed.title = "**{0}** {1:<100}{2}".format(view.upper(), bossname, "|")
     embed.set_footer(text="Taken from report "+report.id)
-    embed.description="```{}```".format(table_string(table, length))
-    embed.color = discord.Colour(colour_map(table[0].type))
+    if(view in ["damage-done", "damage-taken", "healing", "summons", "casts"]):
+        table.sort(key=lambda x: -x.total)
+        embed.description="```{}```".format(table_string(table, length))
+        embed.color = discord.Colour(colour_map(table[0].type))
+    else:
+        embed.description="```{}```".format(table_string(table, length))
+        embed.color = discord.Colour(colour_map(table[0].type))
     if(bossid==0):
         embed.set_thumbnail(url=zone_image_url.format(report.zone))
     else:
