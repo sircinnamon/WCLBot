@@ -534,33 +534,39 @@ def check_server_memberships():
 def report_url(reportID):
     return "https://www.warcraftlogs.com/reports/{}/".format(reportID)
 
+def parse_message_args(message):
+    if(len(message.content.split(" "))<=1):
+        return {}
+    words = message.content.split(" ",1)[1]
+    args = {}
+    translations = {
+        "dps":"damage-done",
+        "hps":"healing",
+        "healer":"healing",
+        "tank":"damage-taken"
+    }
+    for arg in words.split(" "):
+        if(len(arg.split("=",1))==1):
+            continue
+        key=arg.split("=",1)[0].lower()
+        val=arg.split("=",1)[1].lower()
+        if val in translations.keys():
+            val = translations[val]
+        args[key]=val
+    return args
+
+
 def table_command(msg):
     global current_key
     global server_settings
-    args = msg.content[8:].split(" ")
-    view = None
-    report = "recent"
-    fight = "all"
-    length = 20
+    args = parse_message_args(msg)
+    view = None if ("view" not in args.keys()) else args["view"]
+    report = "recent" if ("report" not in args.keys()) else args["report"]
+    fight = "all" if ("fight" not in args.keys()) else args["fight"]
+    length = 20 if ("length" not in args.keys()) else args["length"]
     starttime = 0
     endtime = 0
     bossid = 0 #0=all
-    for arg in args:
-        if(arg.lower().startswith("view=")):
-            if(arg.lower() == "view=dps"):
-                view="damage-done"
-            elif(arg.lower() == "view=healer" or arg.lower() == "view=hps"):
-                view="healing"
-            elif(arg.lower() == "view=tank"):
-                view="damage-taken"
-            else:
-                view=arg.lower()[5:]
-        elif(arg.lower().startswith("report=")):
-            report=arg[7:]
-        elif(arg.lower().startswith("fight=")):
-            fight=arg[6:]
-        elif(arg.lower().startswith("length=")):
-            length=int(arg[7:])
     if(report == "recent"):
         report = most_recent_report(msg.server.id)
     else:
@@ -641,37 +647,17 @@ def table_command(msg):
 def char_command(msg):
     global current_key
     global server_settings
-    args = msg.content[7:].split(" ")
-    view = None
-    charname = None
-    report = "recent"
-    fight = "all"
-    length = 10
+    args = parse_message_args(msg)
+    view = None if ("view" not in args.keys()) else args["view"]
+    charname = None if ("char" not in args.keys()) else args["char"]
+    report = "recent" if ("report" not in args.keys()) else args["report"]
+    fight = "all" if ("fight" not in args.keys()) else args["fight"]
+    length = 10 if ("length" not in args.keys()) else args["length"]
     starttime = 0
     endtime = 0
-    target_mode = False
+    target_mode = False if ("target" not in args.keys()) else True
     charcolor = 0xFFFFFF
     bossid = 0 #0=all
-    for arg in args:
-        if(arg.lower().startswith("view=")):
-            if(arg.lower() == "view=dps"):
-                view="damage-done"
-            elif(arg.lower() == "view=healer" or arg.lower() == "view=hps"):
-                view="healing"
-            elif(arg.lower() == "view=tank"):
-                view="damage-taken"
-            else:
-                view=arg.lower()[5:]
-        elif(arg.lower().startswith("report=")):
-            report=arg[7:]
-        elif(arg.lower().startswith("fight=")):
-            fight=arg[6:]
-        elif(arg.lower().startswith("length=")):
-            length=int(arg[7:])
-        elif(arg.lower().startswith("char=")):
-            charname=arg[5:].lower()
-        elif(arg == "-t"):
-            target_mode = True
     if(report == "recent"):
         report = most_recent_report(msg.server.id)
     else:
@@ -769,20 +755,11 @@ def char_command(msg):
 def att_command(msg):
     global current_key
     global server_settings
-    args = msg.content[6:].split(" ")
-    page_range = 16
-    page = 1
-    length = 25
-    for arg in args:
-        if(arg.lower().startswith("range=")):
-            page_range=min(int(arg.lower()[6:]),16)
-        elif(arg.lower().startswith("page=")):
-            page=int(arg[5:])
-        elif(arg.lower().startswith("length=")):
-            if(arg.lower() == "length=all"):
-                length = 0
-            else:
-                length=int(arg[7:])
+    args = parse_message_args(msg)
+    page_range = 16 if ("range" not in args.keys()) else min(int(args["range"]),16)
+    page = 1 if ("page" not in args.keys()) else int(args["page"])
+    length = 25 if ("length" not in args.keys()) else int(args["length"])
+    if(length=="all"):length=0
     
     #Indexed by name, data is an array of length range with the number of attended fights in report n in array[n]
     full_attendance = dict() 
@@ -790,7 +767,6 @@ def att_command(msg):
                                                       server_settings[msg.server.id].guild_realm, 
                                                       server_settings[msg.server.id].guild_region, 
                                                       key=current_key)
-    full_report_list.reverse()
     logging.info("Requested guild reports for server "+str(msg.server.id))
     for rep in full_report_list:
         if rep.zone == -1:
