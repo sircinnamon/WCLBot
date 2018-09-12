@@ -605,7 +605,7 @@ def table_command(msg):
         bossname = "ALL"
 
     if(view is None):
-        yield from client.send_message(msg.channel, "Please provide a view (damage-done, damage-taken, healing).")
+        yield from client.send_message(msg.channel, "`Please provide a view (damage-done, damage-taken, healing).`")
         return
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime)
     embed = discord.Embed()
@@ -678,6 +678,9 @@ def char_command(msg):
     logging.info("Requested fight list for report "+report.id)
     attendance_list=get_full_attendance(fightlist)
 
+    if(charname is None):
+        yield from client.send_message(msg.channel, "`Please provide a character name (char=<name>).`")
+        return
     char=attendance_list[0]
     for player in attendance_list:
         if(charname in player.name.lower()):
@@ -728,7 +731,7 @@ def char_command(msg):
         bossname = "ALL"
 
     if(view is None):
-        yield from client.send_message(msg.channel, "Please provide a view (damage-done, damage-taken, healing).")
+        yield from client.send_message(msg.channel, "`Please provide a view (damage-done, damage-taken, healing).`")
         return
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime, sourceid=char.id)
     logging.info("Requested {} table for {} from report {} for server {}".format(view,charname,str(report.id),str(msg.server.id)))
