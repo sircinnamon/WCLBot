@@ -47,6 +47,7 @@ command_list_msg =          ("""```Here are the available commands. Some argumen
 ```""")
 private_message_warning =   ("""\n`Sorry, only help messages can be whispered. Other private messages are not supported. Try !wcommands.`""")
 admin_only_warning =   ("""\n`Sorry, only admins can execute that command.`""")
+view_not_supported_warning = ("""Sorry, this view doesn't work here.""")
 
 server_settings_file = "data/server_settings.pkl"
 
@@ -272,23 +273,36 @@ def table_string(table, length, name_width=18, total=0):
     #Takes a table with a total (healing, damage-done, damage-taken, casts and summons)
     #Works for any set of entries with a total and a name
     string = ""
-    table.sort(key=lambda x: x.total)
-    table.reverse()
-    if(total==0):
-        for entry in table:
-            total += entry.total
-    for i in range(0,min(length,len(table))):
-        string += table_string_row(table[i], total, name_width)+"\n"
+    if(len(table) > 0 and hasattr(table[0], "total")):
+        table.sort(key=lambda x: x.total)
+        table.reverse()
+        if(total==0):
+            for entry in table:
+                total += entry.total
+        for i in range(0,min(length,len(table))):
+            string += table_string_row_total(table[i], total, name_width)+"\n"
+    elif(len(table) > 0 and hasattr(table[0], "timestamp")):
+        table.sort(key=lambda x: x.timestamp)
+        for i in range(0,min(length,len(table))):
+            string += table_string_row_time(table[i], name_width)+"\n"
     return string
 
 
-def table_string_row(table_entry, total, width=18):
+def table_string_row_total(table_entry, total, width=18):
     name = table_entry.name
     if(len(name)>width-3):
         name = name[:width-3]+"..."
     format_str = "{0:<{width}}".format(name, width=width)
     format_str += "{0:>8} ".format(abbreviate_num(table_entry.total))
     format_str += "{:.2%} ".format(table_entry.total/total if total!= 0 else 0)
+    return format_str
+
+def table_string_row_time(table_entry, width=18):
+    name = table_entry.name
+    if(len(name)>width-3):
+        name = name[:width-3]+"..."
+    format_str = "{0:<{width}}".format(name, width=width)
+    format_str += "{0:>10} ".format(str(datetime.timedelta(seconds=int(table_entry.timestamp/1000))))
     return format_str
 
 def abbreviate_num(num):
@@ -599,12 +613,17 @@ def table_command(msg):
     embed.title = "**{0}** {1:<100}{2}".format(view.upper(), bossname, "|")
     embed.set_footer(text="Taken from report "+report.id)
     if(view in ["damage-done", "damage-taken", "healing", "summons", "casts"]):
+        # "Total-able" sortable views
         table.sort(key=lambda x: -x.total)
         embed.description="```{}```".format(table_string(table, length))
         embed.color = discord.Colour(colour_map(table[0].type))
-    else:
+    elif(view in ["deaths"]):
+        # Event-list views
         embed.description="```{}```".format(table_string(table, length))
         embed.color = discord.Colour(colour_map(table[0].type))
+    else:
+        embed.description="```{}```".format(view_not_supported_warning)
+        embed.color = discord.Colour.red()
     if(bossid==0):
         embed.set_thumbnail(url=zone_image_url.format(report.zone))
     else:
@@ -711,12 +730,19 @@ def char_command(msg):
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime, sourceid=char.id)
     logging.info("Requested {} table for {} from report {} for server {}".format(view,charname,str(report.id),str(msg.server.id)))
     total = 0
-    for entry in table:
-        total += entry.total
     embed = discord.Embed()
     embed.title = "**{0} {1}** {2:<90}{3}".format(charname.upper(), view.upper(), bossname, "|")
     embed.set_footer(text="Taken from report "+report.id)
-    embed.description="```{}```".format(table_string(table, length, total=total))
+    if(view in ["damage-done", "damage-taken", "healing", "summons", "casts"]):
+        # "Total-able" sortable views
+        for entry in table:
+            total += entry.total
+        embed.description="```{}```".format(table_string(table, length, total=total))
+    elif(view in ["deaths"]):
+        # Event-list views
+        embed.description="```{}```".format(table_string(table, length))
+    else:
+        embed.description="```{}```".format(view_not_supported_warning)
     embed.colour=discord.Colour(charcolor)
     if(bossid==0):
         embed.set_thumbnail(url=zone_image_url.format(report.zone))
