@@ -6,3 +6,6 @@ data
 data/*
 logs
 logs/*
+pycraftlogs_*
+*.sublime*
+virtualenv
