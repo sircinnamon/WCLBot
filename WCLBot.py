@@ -28,14 +28,16 @@ serv_not_registered_msg =   ("""```Whoops! This server is not yet registered. Pl
 help_msg =                  ("""```Hello! I'm Weasel the WarcraftLogs API Discord bot! I can be used to view logs at a glance, track attendance, brag about parses and more! For help with setup, type '!wsetup'. For a full command list, type '!wcommands'. I was created by sircinnamon@gmail.com.```""")
 setup_help_msg =            ("""```If you are an admin, start by typing '!winitialize' to add your server to the registry. This will allow you to use the bot. To set up automatic log tracking, first type '!wguild <guildname> <realm>-<region>'. To enable automatic log reporting, type '!wautolog'. To enable long form reporting, type '!wlonglog'. To change the channel the bot posts in, type '!wchannel' in a channel the bot can view. To allow others to change these settings, type '!wadmin' followed by an @ to all the desired users.```""")
 command_list_msg =          ("""```Here are the available commands. Some arguments must be described with <argname>=<arg>. These are often optional.
+!whelp - Show help message.```
+```[SETUP COMMANDS]
 !winitialize - Add a server to the register to allow bot use.
-!whelp - Show help message.
 !wsetup - Show setup instructions.
 !wadmin - Give users permissions to edit serverwide bot settings. Format: "!wadmin @user"
 !wguild - Set the guild to default to on a server. Format: "!wguild Guild Name Server-Region"
 !wchannel - Set the default channel for auto messages. Simply say command in desired channel.
 !wauto - Toggle auto reporting on/off.
-!wlongmode - Toggle between short and long report summaries.
+!wlongmode - Toggle between short and long report summaries.```
+```[REPORT COMMANDS]
 !wreport - Summarize a particular report. Defaults to most recent. Format "!wreport ReportCode"
 !wfights - List boss pulls in a rpeort. Defaults to most recent. Format "!wfights ReportCode"
 !wtable - Show a table of a particular view. View is required. Fight defaults to all, length defaults to 20.
@@ -542,9 +544,12 @@ def parse_message_args(message):
     args = {}
     translations = {
         "dps":"damage-done",
+        "dd":"damage-done",
         "hps":"healing",
         "healer":"healing",
-        "tank":"damage-taken"
+        "heal":"healing",
+        "tank":"damage-taken",
+        "dt":"damage-taken",
     }
     for arg in words.split(" "):
         if(len(arg.split("=",1))==1):
@@ -679,7 +684,6 @@ def char_command(msg):
             char = player
             break
     charname = player.name.lower()
-
 
     if(fight!="all"):
         fight_obj = search_fights(fight, fightlist, char=char)
@@ -869,6 +873,18 @@ def debug_command(message):
     global server_settings
     yield from client.send_message(message.channel, "```"+str(server_settings[message.server.id])+"```")
 
+def dps_shortcut_command(message):
+    message.content = message.content+" view=damage-done"
+    yield from table_command(message)
+
+def heal_shortcut_command(message):
+    message.content = message.content+" view=healing"
+    yield from table_command(message)
+
+def tank_shortcut_command(message):
+    message.content = message.content+" view=damage-taken"
+    yield from table_command(message)
+
 def colour_map(key):
     if key in class_colors:
         return class_colors[key]
@@ -989,6 +1005,27 @@ command_set = [
         "function": debug_command,
         "allow_private": False,
         "admin_only": True,
+        "require_initialized": True,
+    },
+    {
+        "commands":["dps","damage","dd"],
+        "function": dps_shortcut_command,
+        "allow_private": False,
+        "admin_only": False,
+        "require_initialized": True,
+    },
+    {
+        "commands":["heal","healing","hps","h"],
+        "function": heal_shortcut_command,
+        "allow_private": False,
+        "admin_only": False,
+        "require_initialized": True,
+    },
+    {
+        "commands":["tank","tanking","dt"],
+        "function": tank_shortcut_command,
+        "allow_private": False,
+        "admin_only": False,
         "require_initialized": True,
     },
 ]
