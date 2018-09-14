@@ -234,7 +234,7 @@ def get_key(key_name):
 def report_summary_embed(report):
     date = datetime.datetime.fromtimestamp((report.start/1000)-18000).strftime('%Y-%m-%d')
     embed = discord.Embed()
-    embed.title = "**{0:<70}** {1:>20}".format(report.title, "("+str(report.id)+")")
+    embed.title = "**{0:<60}** {1:>18}".format(report.title, "("+str(report.id)+")")
     embed.url="https://www.warcraftlogs.com/reports/"+str(report.id)
     embed.set_footer(text="Report uploaded by {} on {}".format(report.owner,date))
     return embed
@@ -293,7 +293,7 @@ def table_string(table, length, name_width=18, total=0):
 
 def table_string_row_total(table_entry, total, width=18):
     name = table_entry.name
-    if(len(name)>width-3):
+    if(len(name)>width):
         name = name[:width-3]+"..."
     format_str = "{0:<{width}}".format(name, width=width)
     format_str += "{0:>8} ".format(abbreviate_num(table_entry.total))
@@ -594,7 +594,7 @@ def table_command(msg):
     view = None if ("view" not in args.keys()) else args["view"]
     report = "recent" if ("report" not in args.keys()) else args["report"]
     fight = "all" if ("fight" not in args.keys()) else args["fight"]
-    length = 20 if ("length" not in args.keys()) else args["length"]
+    length = 20 if ("length" not in args.keys()) else int(args["length"])
     starttime = 0
     endtime = 0
     bossid = 0 #0=all
@@ -626,7 +626,8 @@ def table_command(msg):
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime)
     embed = discord.Embed()
     logging.info("Requested "+view+" table from report "+str(report.id)+" for server "+str(msg.server.id))
-    embed.title = "**{0}** {1:<100}{2}".format(view.upper(), bossname, "|")
+    title = "**{0}** {1}".format(view.upper(), bossname)
+    embed.title = "{0:<95}{1}".format(title, "|")
     embed.set_footer(text="Taken from report "+report.id)
     if(len(table)==0):
         embed.description="```{}```".format("No results found!")
@@ -658,7 +659,7 @@ def char_command(msg):
     charname = None if ("char" not in args.keys()) else args["char"]
     report = "recent" if ("report" not in args.keys()) else args["report"]
     fight = "all" if ("fight" not in args.keys()) else args["fight"]
-    length = 10 if ("length" not in args.keys()) else args["length"]
+    length = 10 if ("length" not in args.keys()) else int(args["length"])
     starttime = 0
     endtime = 0
     target_mode = False if ("target" not in args.keys()) else True
@@ -705,7 +706,8 @@ def char_command(msg):
     logging.info("Requested {} table for {} from report {} for server {}".format(view,charname,str(report.id),str(msg.server.id)))
     total = 0
     embed = discord.Embed()
-    embed.title = "**{0} {1}** {2:<90}{3}".format(charname.upper(), view.upper(), bossname, "|")
+    title = "**{0}** **{1}** {2}".format(charname.upper(), view.upper(), bossname)
+    embed.title = "{0:<90}{1}".format(title, "|")
     embed.set_footer(text="Taken from report "+report.id)
     if(len(table)==0):
         embed.description="```{}```".format("No results found!")
@@ -769,7 +771,7 @@ def att_command(msg):
     startdate = datetime.datetime.fromtimestamp((full_report_list[(page-1)*(page_range)].start/1000)-18000).strftime('%Y-%m-%d')
     enddate = datetime.datetime.fromtimestamp((full_report_list[(page)*(page_range)].start/1000)-18000).strftime('%Y-%m-%d')
     embed = discord.Embed()
-    embed.title = "{0:<100}|".format("Attendance Chart")
+    embed.title = "{0:<95}|".format("Attendance Chart")
     embed.set_footer(text=startdate+" to "+enddate)
     headers = "NAME           | % |"+report_days.upper()+"\n"
     embed.description="```{}{}```".format(headers,attendance_table_string(attendance_rows,length))
@@ -786,7 +788,8 @@ def get_full_attendance(fightlist):
     players = {}
     for fight in fightlist:
         for player in fight.friendlies:
-            if((player.id not in players) and (player.type != "NPC" and (player.type != "Unknown") and (player.type != "Pet"))):
+            invalid_types = ["NPC","Unknown","Pet"]
+            if((player.id not in players) and (player.type not in invalid_types)):
                 players[player.id] = player
     return list(players.values())
 
