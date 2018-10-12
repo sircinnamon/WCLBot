@@ -302,7 +302,7 @@ def table_string_row_total(table_entry, total, width=18):
 
 def table_string_row_time(table_entry, width=18):
     name = table_entry.name
-    if(len(name)>width-3):
+    if(len(name)>width):
         name = name[:width-3]+"..."
     format_str = "{0:<{width}}".format(name, width=width)
     format_str += "{0:>10} ".format(str(datetime.timedelta(seconds=int(table_entry.timestamp/1000))))
@@ -773,8 +773,10 @@ def att_command(msg):
     embed = discord.Embed()
     embed.title = "{0:<95}|".format("Attendance Chart")
     embed.set_footer(text=startdate+" to "+enddate)
-    headers = "NAME           | % |"+report_days.upper()+"\n"
-    embed.description="```{}{}```".format(headers,attendance_table_string(attendance_rows,length))
+    # headers = "NAME           | % |"+report_days.upper()+"\n"
+    headers = "{0:<13}|{1:<3}|{2}\n".format("NAME"," %",report_days.upper())
+    embed.description="```{}{}```".format(headers,attendance_table_string(attendance_rows,length,14))
+    embed.set_thumbnail(url=zone_image_url.format(full_report_list[0].zone))
     yield from client.send_message(msg.channel, embed=embed)
     return embed
 
@@ -808,21 +810,21 @@ def get_attendance_percent(array):
     #from an array of fights attended per night, what percent are non-0
     return round(100*(len(array)-array.count(0))/len(array))
 
-def attendance_table_string(table, length):
+def attendance_table_string(table, length, width=18):
     #Takes a list of tuples formatted as (name,array of attended fights by report, percent attendance)
     string = ""
     table.sort(key=lambda x: x[2])
     table.reverse()
     for i in range(0,min(length,len(table))):
-        string += attendance_table_string_row(table[i])+"\n"
+        string += attendance_table_string_row(table[i], width)+"\n"
     return string
 
 
-def attendance_table_string_row(table_entry):
+def attendance_table_string_row(table_entry,width=18):
     name = table_entry[0]
-    if(len(name)>13):
-        name = name[:13]+"..."
-    format_str = "{0:<{width}}".format(name, width=16)
+    if(len(name)>width):
+        name = name[:width-3]+"..."
+    format_str = "{0:<{width}}".format(name, width=width)
     format_str += "{0:<4}".format(table_entry[2])
     for day in table_entry[1]:
         if(day==0): format_str+="_"
