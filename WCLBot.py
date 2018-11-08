@@ -420,9 +420,14 @@ def auto_report_trigger(serverID, refresh=True):
                                                  serv_info.guild_region, 
                                                  start=serv_info.most_recent_log_start,
                                                  key=current_key)
-        reports.reverse()
         logging.info("Requested guild reports for server "+str(serverID))
-        if(len(reports)>0 and reports[0].end > serv_info.most_recent_log_end):
+        real_reports = []
+        for r in reports:
+            #ignore empty logs
+            if(r.end - r.start > 1000):
+                real_reports.append(r)
+        reports = real_reports
+        if(len(reports)>0 and int(reports[0].end) > serv_info.most_recent_log_end):
             if(serv_info.most_recent_log_end == 0):
                 #just set it and forget it
                 serv_info.most_recent_log_end = reports[0].end
@@ -438,16 +443,14 @@ def auto_report_trigger(serverID, refresh=True):
                 messageID = server_settings[serverID].most_recent_log_summary
                 report_queue.append((channel, embed, messageID)) #edit message messageID to be this info now
         for r in reports[1:]:
-            #ignore empty logs
-            if(r.end - r.start > 1000):
-                logging.info("New log {} found for server {}".format(str(r.id),str(serverID)))
-                if(serv_info.auto_report_mode_long):
-                    embed = report_summary_embed_long(r)
-                else:
-                    embed = report_summary_embed(r)
-                server = discord.utils.get(client.servers, id=serv_info.server_id)
-                channel = discord.utils.get(server.channels, id=serv_info.default_channel)
-                report_queue.append((channel, embed, 0)) #0 for message id to edit - ie there is none
+            logging.info("New log {} found for server {}".format(str(r.id),str(serverID)))
+            if(serv_info.auto_report_mode_long):
+                embed = report_summary_embed_long(r)
+            else:
+                embed = report_summary_embed(r)
+            server = discord.utils.get(client.servers, id=serv_info.server_id)
+            channel = discord.utils.get(server.channels, id=serv_info.default_channel)
+            report_queue.append((channel, embed, 0)) #0 for message id to edit - ie there is none
         if(len(reports) >= 1 and (reports[len(reports)-1].end-reports[len(reports)-1].start > 1000)):
             serv_info.update_recent_log(reports[len(reports)-1].start,reports[len(reports)-1].end)
             server_settings[serverID] = serv_info
