@@ -426,7 +426,10 @@ def auto_report_trigger(serverID, refresh=True):
             #ignore empty logs
             if(r.end - r.start > 1000):
                 real_reports.append(r)
+        # Reverse to order chronologically
+        real_reports.reverse()
         reports = real_reports
+        # reports[0] should be the one previously known as most recent
         if(len(reports)>0 and int(reports[0].end) > serv_info.most_recent_log_end):
             if(serv_info.most_recent_log_end == 0):
                 #just set it and forget it
@@ -451,8 +454,8 @@ def auto_report_trigger(serverID, refresh=True):
             server = discord.utils.get(client.servers, id=serv_info.server_id)
             channel = discord.utils.get(server.channels, id=serv_info.default_channel)
             report_queue.append((channel, embed, 0)) #0 for message id to edit - ie there is none
-        if(len(reports) >= 1 and (reports[len(reports)-1].end-reports[len(reports)-1].start > 1000)):
-            serv_info.update_recent_log(reports[len(reports)-1].start,reports[len(reports)-1].end)
+        if(len(reports) > 1 and (reports[-1].end-reports[-1].start > 1000) and (reports[-1].end > serv_info.most_recent_log_end)):
+            serv_info.update_recent_log(reports[-1].start,reports[-1].end)
             server_settings[serverID] = serv_info
             save_server_settings()
     except HTTPError as ex:
