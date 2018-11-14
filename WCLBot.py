@@ -876,6 +876,15 @@ def fights_command(message):
     embed.set_thumbnail(url=zone_image_url.format(report_obj.zone))
     yield from client.send_message(message.channel, embed=embed)
 
+def reset_history_command(message):
+    # This command can fix corrupted data maybe
+    serv_info = server_settings[serverID]
+    serv_info.most_recent_log_start = most_recent_report(message.server.id).start
+    serv_info.most_recent_log_end = serv_info.most_recent_log_start
+    serv_info.most_recent_log_summary = 0
+    server_settings[msg.server.id] = serv_info
+    save_server_settings()
+
 def check_command(message):
     yield from client.send_message(message.channel, "Checking for updates...")
     auto_report_trigger(message.server.id, refresh=False)
@@ -1037,6 +1046,13 @@ command_set = [
         "function": tank_shortcut_command,
         "allow_private": False,
         "admin_only": False,
+        "require_initialized": True,
+    },
+    {
+        "commands":["reset",],
+        "function": reset_history_command,
+        "allow_private": False,
+        "admin_only": True,
         "require_initialized": True,
     },
 ]
