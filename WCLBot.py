@@ -52,6 +52,7 @@ admin_only_warning =   ("""\n`Sorry, only admins can execute that command.`""")
 view_not_supported_warning = ("""Sorry, this view doesn't work here.""")
 
 server_settings_file = "data/server_settings.pkl"
+logging.setLevel(20)
 
 class_colors = {
     "DeathKnight":0xC41F3B,
@@ -444,6 +445,7 @@ def auto_report_trigger(serverID, refresh=True):
                 server = discord.utils.get(client.servers, id=serv_info.server_id)
                 channel = discord.utils.get(server.channels, id=serv_info.default_channel)
                 messageID = server_settings[serverID].most_recent_log_summary
+                logging.info("Edit report to message {}".format(messageID))
                 report_queue.append((channel, embed, messageID)) #edit message messageID to be this info now
         for r in reports[1:]:
             logging.info("New log {} found for server {}".format(str(r.id),str(serverID)))
