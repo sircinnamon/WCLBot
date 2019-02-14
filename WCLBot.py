@@ -430,6 +430,7 @@ def auto_report_trigger(serverID, refresh=True):
         real_reports.reverse()
         reports = real_reports
         # reports[0] should be the one previously known as most recent
+        logging.info("Reports found for server: {}".format(", ".join(item.id for item in reports)))
         if(len(reports)>0 and int(reports[0].end) > serv_info.most_recent_log_end):
             if(serv_info.most_recent_log_end == 0):
                 #just set it and forget it
@@ -1071,7 +1072,6 @@ file = open("logs/bot.log", "a+")
 file.close()
 logging.basicConfig(filename="logs/bot.log",format="(%(asctime)s) %(levelname)s:%(message)s",level=logging.INFO)
 logging.info("Logging configured.")
-logging.setLevel(20)
 
 while(True):
     try:
