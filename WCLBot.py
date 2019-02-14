@@ -52,7 +52,6 @@ admin_only_warning =   ("""\n`Sorry, only admins can execute that command.`""")
 view_not_supported_warning = ("""Sorry, this view doesn't work here.""")
 
 server_settings_file = "data/server_settings.pkl"
-logging.setLevel(20)
 
 class_colors = {
     "DeathKnight":0xC41F3B,
@@ -1072,6 +1071,7 @@ file = open("logs/bot.log", "a+")
 file.close()
 logging.basicConfig(filename="logs/bot.log",format="(%(asctime)s) %(levelname)s:%(message)s",level=logging.INFO)
 logging.info("Logging configured.")
+logging.setLevel(20)
 
 while(True):
     try:
