@@ -456,7 +456,7 @@ def auto_report_trigger(serverID, refresh=True):
             server = discord.utils.get(client.servers, id=serv_info.server_id)
             channel = discord.utils.get(server.channels, id=serv_info.default_channel)
             report_queue.append((channel, embed, 0)) #0 for message id to edit - ie there is none
-        if(len(reports) > 1 and (reports[-1].end-reports[-1].start > 1000) and (reports[-1].end > serv_info.most_recent_log_end)):
+        if(len(reports) > 0 and (reports[-1].end-reports[-1].start > 1000) and (reports[-1].end > serv_info.most_recent_log_end)):
             serv_info.update_recent_log(reports[-1].start,reports[-1].end)
             server_settings[serverID] = serv_info
             save_server_settings()
