@@ -142,6 +142,9 @@ def load_server_settings():
     # Enforce format of server settings objects (Ensure old string snowflake ids work)
     for s_id in server_settings:
         server_settings[s_id].enforce_format()
+        if(isinstance(s_id, str)):
+            server_settings[int(s_id)]=server_settings[s_id]
+            del server_settings[s_id]
 
 def user_is_admin(userID, serverID):
     global server_settings
