@@ -14,10 +14,6 @@ from ServerInfo import ServerInfo
 
 client = discord.Client()
 
-player_lock = asyncio.Lock()
-tts_lock = asyncio.Lock()
-
-enabled = True
 current_key = None
 server_settings = dict()
 thread_list = list()
@@ -78,9 +74,10 @@ difficulty_colors = {
 zone_image_url="https://dmszsuqyoe6y6.cloudfront.net/img/warcraft/zones/zone-{}-small.jpg"
 boss_image_url="https://dmszsuqyoe6y6.cloudfront.net/img/warcraft/bosses/{}-icon.jpg"
 
+# Event handling functions
+
 @client.event
-@asyncio.coroutine
-def on_ready():
+async def on_ready():
     global thread_list
     load_server_settings()
     print('Logged in as')
@@ -88,25 +85,20 @@ def on_ready():
     print(client.user.id)
     print('------')
     print("Current servers:")
-    for server in client.servers:
+    for server in client.guilds:
         print("* {} ({})".format(server.name,server.id))
     print('------')
     logging.info("Logged in successfully")
     thread_list = startup_auto_report()
-    asyncio.ensure_future(check_report_queue())
-    asyncio.ensure_future(check_server_memberships())
-    yield from client.change_presence(game=discord.Game(name='WarcraftLogs'))
+    asyncio.create_task(check_report_queue())
+    asyncio.create_task(check_server_memberships())
+    await client.change_presence(activity=discord.Activity(name='WarcraftLogs'))
 
 @client.event
-@asyncio.coroutine
-def on_message(message):
-    global enabled
+async def on_message(message):
     global current_key
 
-    if(message.server is not None): print("["+message.server.name+"/"+message.channel.name+"] "+message.author.name+":")
-    elif(message.channel.is_private and message.channel.type is discord.ChannelType.group): print("[PRIVATE/"+message.channel.name+"] "+message.author.name+":")
-    elif(message.channel.is_private): print("[PRIVATE] "+message.author.name+":")
-    print(message.content)
+    log_message(message)
 
     if(message.author == client.user):
         #Ignore own messages
@@ -114,114 +106,78 @@ def on_message(message):
     for command in command_set:
         for command_str in command["commands"]:
             if message.content.startswith(CMD_PREFIX+command_str):
-                yield from client.send_typing(message.channel)
-                if(command["allow_private"]==False and message.server is None):
-                    yield from client.send_message(message.channel, shuffle_case(message.clean_content)+" "+private_message_warning)
-                    return
-                if(command["admin_only"] and not verify_user_admin(message.author.id, message.server.id)):
-                    yield from client.send_message(message.channel, admin_only_warning)
-                    return
-                if(command["require_initialized"] and not verify_server_registered(message.server.id)):
-                    yield from client.send_message(message.channel, serv_not_registered_msg)
-                    return
-                yield from command["function"](message)
-                return
-
+                with message.channel.typing():
+                    if(not command["allow_private"] and isinstance(message.channel, discord.abc.PrivateChannel)):
+                        logging.info("Blocked command: '{}'".format(message.content))
+                        logging.info("Channel: '{}\nis GuildChannel: {}\nis Privatechannel: {}'".format(message.content,isinstance(message.channel, discord.abc.GuildChannel),isinstance(message.channel, discord.abc.PrivateChannel)))
+                        await message.channel.send(shuffle_case(message.clean_content)+" "+private_message_warning)
+                    elif(command["admin_only"] and not user_is_admin(message.author.id, message.guild.id)):
+                        await message.channel.send(admin_only_warning)
+                    elif(command["require_initialized"] and not server_is_registered(message.guild.id)):
+                        await message.channel.send(serv_not_registered_msg)
+                    else:
+                        logging.info("Command went through: '{}'".format(message.content))
+                        await command["function"](message)
 
 @client.event
-@asyncio.coroutine
-def on_voice_state_update(before, after):
-    global message_channel
-    global enabled
-    print("Voice state change for user " + before.name)
+async def on_voice_state_update(member, before, after):
+    print("Voice state change for user " + member.nick)
 
-def initialize_new_server(msg):
-    global server_settings
-    if msg.server.id in server_settings:
-        return False
-    else:
-        new_server_info = ServerInfo(msg.server.id)
-        new_server_info.add_admin(msg.author.id)
-        new_server_info.set_default_channel(msg.server.default_channel.id)
-        server_settings[msg.server.id] = new_server_info
-        save_server_settings()
-        yield from client.send_message(msg.channel, "Added new server and admin.")
-        logging.info("New server "+str(msg.server.id)+" initialized.")
-        return True
-
-def verify_user_admin(userID, serverID):
-    global server_settings
-    if(serverID not in server_settings):
-        return False
-    serv_info = server_settings[serverID]
-    if userID in serv_info.admins:
-        return True
-    else:
-        return False
-
-def verify_server_registered(serverID):
-    global server_settings
-    if(serverID not in server_settings):
-        return False
-    else:
-        return True
-
-def update_server_guild_info(msg):
-    global server_settings
-    serv_info = server_settings[msg.server.id]
-    guildname = " ".join(msg.content.split(" ")[1:(len(msg.content.split(" "))-1)])
-    serv_info.update_guild(guildname, 
-                           msg.content.split(guildname+" ")[1].split("-")[0], 
-                           msg.content.split(guildname+" ")[1].split("-")[1]
-                           )
-    server_settings[msg.server.id] = serv_info
-    save_server_settings()
-    yield from client.send_message(msg.channel, "Server guild set to <{} {}-{}>".format(serv_info.guild_name, serv_info.guild_realm, serv_info.guild_region))
-    logging.info("Server {} guild info updated to <{} {}-{}>".format(str(msg.server.id),serv_info.guild_name,serv_info.guild_realm,serv_info.guild_region))
-    return True
-
-def update_server_default_channel(msg):
-    global server_settings
-    serv_info = server_settings[msg.server.id]
-    serv_info.set_default_channel(msg.channel.id)
-    server_settings[msg.server.id] = serv_info
-    save_server_settings()
-    yield from client.send_message(msg.channel, "This is now the default channel!")
-    logging.info("Server {} default channel updated to {}".format(str(msg.server.id),str(msg.channel.id)))
-    return True
-
-def add_server_admin(msg):
-    global server_settings
-    serv_info = server_settings[msg.server.id]
-    for admin in msg.mentions:
-        serv_info.add_admin(admin.id)
-        logging.info("Admin {} added to server {}".format(str(admin.id),str(msg.server.id)))
-    else:
-        for admin in msg.content.split(" "):
-            if msg.server.get_member(admin) != None:
-                serv_info.add_admin()
-                logging.info("Admin {} added to server {}".format(str(admin.id),str(msg.server.id)))
-    server_settings[msg.server.id] = serv_info
-    save_server_settings()
-    yield from client.send_message(msg.channel, "Admins updated!")
-    return True
+# Internal helper functions
 
 def save_server_settings():
+    # Export server settings object from memory to pickled cache file
     global server_settings
     pkl_file = open(server_settings_file, 'wb')
     pickle.dump(server_settings, pkl_file)
     pkl_file.close()
 
 def load_server_settings():
+    # If it exists, unpickle and import the server settings file into the global
     global server_settings
     if(os.path.isfile(server_settings_file) == True):
         pkl_file = open(server_settings_file, 'rb')
         server_settings = pickle.load(pkl_file)
         pkl_file.close()
 
-def get_key(key_name):
+def user_is_admin(userID, serverID):
+    global server_settings
+    return (server_is_registered(serverID) and (userID in server_settings[serverID].admins))
+
+def server_is_registered(serverID):
+    global server_settings
+    return (serverID in server_settings)
+
+def startup_auto_report():
+    # To be run on startup
+    # Start all timers for servers with auto report enabled
+    global server_settings
+    global client
+    timers = list()
+    for serv in server_settings.values():
+        if(serv.auto_report and serv.has_guild()):
+            t = Timer(3, auto_report_trigger, args=(serv.server_id,))
+            t.daemon = True
+            t.start()
+            t.name = serv.server_id
+            timers.append(t)
+            logging.info("Report timer started for {} {}-{}[{}]".format(
+                serv.guild_name, 
+                serv.guild_realm, 
+                serv.guild_region, 
+                serv.server_id
+            ))
+    return timers
+
+def log_message(message):
+    if(message.guild is not None): print("["+message.guild.name+"/"+message.channel.name+"] "+message.author.name+":")
+    elif(message.channel.is_private and message.channel.type is discord.ChannelType.group): print("[PRIVATE/"+message.channel.name+"] "+message.author.name+":")
+    elif(message.channel.is_private): print("[PRIVATE] "+message.author.name+":")
+    print(message.content)
+
+def get_key(key_name, key_file=".keyfile"):
     try:
-        with open(".keyfile") as f:
+        with open(key_file) as f:
             keylist = f.readlines()
         for x in keylist:
             if(x.split(":"))[0] == key_name:
@@ -230,6 +186,26 @@ def get_key(key_name):
         return None
     except:
         return None
+
+def shuffle_case(string):
+    upper_string = string.upper()
+    lower_string = string.lower()
+    new_string = ""
+    odd = False
+    for upp,low in zip(upper_string,lower_string):
+        if(odd): new_string = new_string+upp
+        else: new_string = new_string+low
+        odd = not odd
+    return new_string
+
+def colour_map(key):
+    if key in class_colors:
+        return class_colors[key]
+    if key in difficulty_colors:
+        return difficulty_colors[key]
+    else:
+        #Default color
+        return 0x979c9f
 
 def report_summary_embed(report):
     date = datetime.datetime.fromtimestamp((report.start/1000)-18000).strftime('%Y-%m-%d')
@@ -246,8 +222,10 @@ def report_summary_embed_long(report):
         fightlist = pcl.generate_fight_list(report.id, key=current_key)
         logging.info("Requested fight list for report "+report.id)
         if(len(fightlist)==0):raise ValueError("Fight list array is empty.")
+        fightlist_str = fight_list_string_short(fightlist)
+        if(len(fightlist_str)==0):raise ValueError("No boss fights found.")
         embed.add_field(name="Fights", 
-                        value="```"+fight_list_string_short(fightlist)+"```", 
+                        value="```"+fightlist_str+"```", 
                         inline=False)
 
         topdmg_table = pcl.wow_report_tables("damage-done", report.id, key=current_key, end=report.end-report.start)
@@ -271,6 +249,37 @@ def report_summary_embed_long(report):
     embed.colour = discord.Colour(colour_map(get_difficulty(difficulty)))
     embed.set_thumbnail(url=zone_image_url.format(report.zone))
     return embed
+
+def fight_list_string_short(fightlist):
+    string = ""
+    newlist = list()
+    for fight in fightlist:
+        if fight.boss != 0:
+            newlist.append((fight.name,fight.difficulty))
+    fightlist = newlist
+    counted = list()
+    for fight in fightlist:
+        if(fight not in counted):
+            difficulty = get_difficulty(fight[1])[0]
+            string += "{0} {1:<25}".format(difficulty,fight[0])
+            if(fightlist.count(fight)>1):
+                string+=" x"+str(fightlist.count(fight))
+            string+="\n"
+            counted.append(fight)
+    return string
+
+def fight_list_string_long(fightlist):
+    string = ""
+    for fight in fightlist:
+        if(fight.boss != 0):
+            difficulty = get_difficulty(fight.difficulty)[0]
+            string += "{0:>3}: {1} {2:<20} - ".format(fight.id, difficulty, fight.name)
+            if(fight.kill == False):
+                string+="{:{align}{width}.2%}".format(fight.fightPercentage/10000,width=6,align=">")
+            else:
+                string+="{:{align}{width}}".format("Kill",width=6,align=">")
+            string+="\n"
+    return string
 
 def table_string(table, length, name_width=18, total=0):
     #Takes a table with a total (healing, damage-done, damage-taken, casts and summons)
@@ -308,6 +317,27 @@ def table_string_row_time(table_entry, width=18):
     format_str += "{0:>10} ".format(str(datetime.timedelta(seconds=int(table_entry.timestamp/1000))))
     return format_str
 
+def attendance_table_string(table, length, width=18):
+    #Takes a list of tuples formatted as (name,array of attended fights by report, percent attendance)
+    string = ""
+    table.sort(key=lambda x: x[2])
+    table.reverse()
+    for i in range(0,min(length,len(table))):
+        string += attendance_table_string_row(table[i], width)+"\n"
+    return string
+
+
+def attendance_table_string_row(table_entry,width=18):
+    name = table_entry[0]
+    if(len(name)>width):
+        name = name[:width-3]+"..."
+    format_str = "{0:<{width}}".format(name, width=width)
+    format_str += "{0:<4}".format(table_entry[2])
+    for day in table_entry[1]:
+        if(day==0): format_str+="_"
+        else: format_str+="X"
+    return format_str
+
 def abbreviate_num(num):
     for unit in ['','K','M','B','T','Q']:
         if(abs(num)<1000):
@@ -315,41 +345,101 @@ def abbreviate_num(num):
         num /= 1000
     return "{0:.2f}{1:2}".format(num, "Qt")
 
-def fight_list_string_short(fightlist):
-    string = ""
-    newlist = list()
-    for fight in fightlist:
-        if fight.boss != 0:
-            newlist.append((fight.name,fight.difficulty))
-    fightlist = newlist
-    counted = list()
-    for fight in fightlist:
-        if(fight not in counted):
-            difficulty = get_difficulty(fight[1])[0]
-            string += "{0} {1:<25}".format(difficulty,fight[0])
-            if(fightlist.count(fight)>1):
-                string+=" x"+str(fightlist.count(fight))
-            string+="\n"
-            counted.append(fight)
-    return string
-
-def fight_list_string_long(fightlist):
-    string = ""
-    for fight in fightlist:
-        if(fight.boss != 0):
-            difficulty = get_difficulty(fight.difficulty)[0]
-            string += "{0:>3}: {1} {2:<20} - ".format(fight.id, difficulty, fight.name)
-            if(fight.kill == False):
-                string+="{:{align}{width}.2%}".format(fight.fightPercentage/10000,width=6,align=">")
-            else:
-                string+="{:{align}{width}}".format("Kill",width=6,align=">")
-            string+="\n"
-    return string
-
 def get_difficulty(num):
     difficulties = ["","","LFR","Normal","Heroic","Mythic"]
     if(num > len(difficulties)-1):return "?"
     return difficulties[num]
+
+def search_fights(searchkey, fightlist, char=None):
+    #If char given then limit to that chars attended fights
+    if(char is not None):
+        attended_fights = list()
+        for f in fightlist:
+            if(char.attended(f.id)):
+                attended_fights.append(f)
+        fightlist = attended_fights
+    if(searchkey.isdigit()):
+        #Assume its a fight id
+        for f in fightlist:
+            if(f.id == int(searchkey)):
+                return f
+        return None
+    #Assume its a bossname and get kill or latest attempt
+    searchkey = searchable(searchkey.lower())
+    fightlist.reverse()
+    found = False
+    for f in fightlist:
+        if(f.boss!=0 and f.kill and (searchkey in f.name.lower() or searchkey in searchable(f.name.lower()))):
+            return f
+    for f in fightlist:
+        if(searchkey in f.name.lower() or searchkey in searchable(f.name.lower())):
+            return f
+    return None
+
+def searchable(string):
+    for char in string:
+        if char not in " abcdefghijklmnopqrstuvwxyz":
+            string = string.replace(char, "")
+    return string
+
+def parse_message_args(message):
+    if(len(message.content.split(" "))<=1):
+        return {}
+    words = message.content.split(" ",1)[1]
+    args = {}
+    translations = {
+        "dps":"damage-done",
+        "dd":"damage-done",
+        "hps":"healing",
+        "healer":"healing",
+        "heal":"healing",
+        "tank":"damage-taken",
+        "dt":"damage-taken",
+    }
+    for arg in words.split(" "):
+        if(len(arg.split("=",1))==1):
+            continue
+        key=arg.split("=",1)[0].lower()
+        val=arg.split("=",1)[1].lower()
+        if val in translations.keys():
+            val = translations[val]
+        args[key]=val
+    return args
+
+async def check_report_queue():
+    global report_queue
+    global server_settings
+    while(len(report_queue)==0):
+        await asyncio.sleep(15)
+    while(len(report_queue)>0):
+        rep = report_queue.popleft()
+        if(rep[2]==0):
+            message = await rep[0].send(embed=rep[1])
+        else:
+            try:
+                message = await rep[0].fetch_message(rep[2])
+            except discord.NotFound:
+                message = None
+            if(message is None):
+                message = await rep[0].send(embed=rep[1])
+            else:
+                message = await message.edit(embed=rep[1])
+        server_settings[message.guild.id].most_recent_log_summary = message.id
+    asyncio.create_task(check_report_queue())
+
+async def check_server_memberships():
+    global server_settings
+    await asyncio.sleep(3600)
+    active_servers = list([x.id for x in client.guilds])
+    for entry in server_settings.values():
+        if entry.server_id not in active_servers:
+            del server_settings[entry.server_id]
+            logging.warning("Server "+entry.server_id + " removed from memory.")
+            # print("Server "+entry.id + " removed from memory.")
+            save_server_settings()
+    asyncio.create_task(check_server_memberships())
+
+# WarcraftLogs API helper functions
 
 def get_report(reportID):
     global current_key
@@ -361,47 +451,87 @@ def most_recent_report(serverID):
     global server_settings
     global current_key
     info = server_settings[serverID]
-    if not info.has_guild:
+    if not info.has_guild():
         return None
     else:
         reports = pcl.generate_guild_report_list(info.guild_name, info.guild_realm, info.guild_region, key=current_key)
-        logging.info("Requested guild reports for server "+serverID)
+        logging.info("Requested guild reports for server {}".format(serverID))
         return reports[0]
 
-def toggle_auto_report(msg):
+async def table_command(msg):
+    global current_key
     global server_settings
-    global thread_list
-    if not (server_settings[msg.server.id].has_guild()):
-        yield from client.send_message(msg.channel, "You must set a server guild first!")
-        return
-    server_settings[msg.server.id].toggle_auto_report()
-    save_server_settings()
-    #start thread for server
-    t = Timer(3, auto_report_trigger, args=(msg.server.id,))
-    t.daemon = True
-    t.start()
-    t.name = msg.server.id
-    #print(serv.server_id)
-    thread_list.append(t)
-    logging.info("Auto report set to {} for server {}".format(str(server_settings[msg.server.id].auto_report),str(msg.server.id)))
-    yield from client.send_message(msg.channel, "Auto Report mode is now set to {}.".format(str(server_settings[msg.server.id].auto_report)))
+    args = parse_message_args(msg)
+    view = None if ("view" not in args.keys()) else args["view"]
+    report = "recent" if ("report" not in args.keys()) else args["report"]
+    fight = "all" if ("fight" not in args.keys()) else args["fight"]
+    length = 20 if ("length" not in args.keys()) else int(args["length"])
+    starttime = 0
+    endtime = 0
+    bossid = 0 #0=all
+    if(report == "recent"):
+        report = most_recent_report(msg.guild.id)
+    else:
+        report = pcl.wow_get_report(report, key=current_key)
+        logging.info("Requested report "+report.id)
+    endtime=report.end-report.start
+    if(fight!="all"):
+        bossname=None
+        logging.info("Requested fight list for report "+report.id)
+        fightlist=pcl.generate_fight_list(report.id, key=current_key)
+        fight_obj = search_fights(fight, fightlist)
+        if(fight_obj is not None):
+            starttime = fight_obj.start_time
+            endtime = fight_obj.end_time
+            bossname = fight_obj.name.upper()
+            bossid = fight_obj.boss
+        else:
+            await msg.channel.send("`Please provide a valid fight name or ID.`")
+            return
+    else:
+        bossname = "ALL"
 
-def toggle_auto_report_mode(msg):
-    global server_settings
-    server_settings[msg.server.id].toggle_auto_report_mode()
-    save_server_settings()
-    logging.info("Long auto report set to {} for server {}".format(str(server_settings[msg.server.id].auto_report_mode_long),str(msg.server.id)))
-    yield from client.send_message(msg.channel, "Long Auto Report mode is now set to "+str(server_settings[msg.server.id].auto_report_mode_long)+".")
+    if(view is None):
+        await msg.channel.send("`Please provide a view (damage-done, damage-taken, healing).`")
+        return
+    table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime)
+    embed = discord.Embed()
+    logging.info("Requested "+view+" table from report "+str(report.id)+" for server "+str(msg.guild.id))
+    title = "**{0}** {1}".format(view.upper(), bossname)
+    embed.title = "{0:<95}{1}".format(title, "|")
+    embed.set_footer(text="Taken from report "+report.id)
+    if(len(table)==0):
+        embed.description="```{}```".format("No results found!")
+        embed.color = discord.Colour.red()
+    elif(view in ["damage-done", "damage-taken", "healing", "summons", "casts"]):
+        # "Total-able" sortable views
+        table.sort(key=lambda x: -x.total)
+        embed.description="```{}```".format(table_string(table, length))
+        embed.color = discord.Colour(colour_map(table[0].type))
+    elif(view in ["deaths"]):
+        # Event-list views
+        embed.description="```{}```".format(table_string(table, length))
+        embed.color = discord.Colour(colour_map(table[0].type))
+    else:
+        embed.description="```{}```".format(view_not_supported_warning)
+        embed.color = discord.Colour.red()
+    if(bossid==0):
+        embed.set_thumbnail(url=zone_image_url.format(report.zone))
+    else:
+        embed.set_thumbnail(url=boss_image_url.format(bossid))
+    await msg.channel.send(embed=embed)
+    return embed
 
 def auto_report_trigger(serverID, refresh=True):
-    print("Timer fired for server "+serverID, flush=True)
-    logging.info("Auto Report timer fired for server "+serverID)
+    # print("Timer fired for server "+serverID, flush=True)
+    logging.info("Auto Report timer fired for server {}".format(serverID))
     global server_settings
     global current_key
     global thread_list
     global report_queue
 
     if(serverID not in server_settings):
+        # Server is not initialized somehow
         return
     serv_info = server_settings[serverID]
     if(serv_info.auto_report == False):
@@ -432,6 +562,7 @@ def auto_report_trigger(serverID, refresh=True):
         # reports[0] should be the one previously known as most recent
         logging.info("Reports found for server: {}".format(", ".join(item.id for item in reports)))
         if(len(reports)>0 and int(reports[0].end) > serv_info.most_recent_log_end):
+            # Most recently seen report has an end time later than we know about
             if(serv_info.most_recent_log_end == 0):
                 #just set it and forget it
                 serv_info.most_recent_log_end = reports[0].end
@@ -442,19 +573,18 @@ def auto_report_trigger(serverID, refresh=True):
                     embed = report_summary_embed_long(reports[0])
                 else:
                     embed = report_summary_embed(reports[0])
-                server = discord.utils.get(client.servers, id=serv_info.server_id)
-                channel = discord.utils.get(server.channels, id=serv_info.default_channel)
+                channel = discord.utils.get(client.get_all_channels(), id=serv_info.default_channel)
                 messageID = server_settings[serverID].most_recent_log_summary
                 logging.info("Edit report to message {}".format(messageID))
                 report_queue.append((channel, embed, messageID)) #edit message messageID to be this info now
         for r in reports[1:]:
+            # For completely new reports
             logging.info("New log {} found for server {}".format(str(r.id),str(serverID)))
             if(serv_info.auto_report_mode_long):
                 embed = report_summary_embed_long(r)
             else:
                 embed = report_summary_embed(r)
-            server = discord.utils.get(client.servers, id=serv_info.server_id)
-            channel = discord.utils.get(server.channels, id=serv_info.default_channel)
+            channel = discord.utils.get(client.get_all_channels(), id=serv_info.default_channel)
             report_queue.append((channel, embed, 0)) #0 for message id to edit - ie there is none
         if(len(reports) > 0 and (reports[-1].end-reports[-1].start > 1000) and (reports[-1].end > serv_info.most_recent_log_end)):
             serv_info.update_recent_log(reports[-1].start,reports[-1].end)
@@ -488,181 +618,11 @@ def auto_report_trigger(serverID, refresh=True):
         thread_list.append(t)
         #print("New Thread "+serverID, flush=True)
 
-def startup_auto_report():
-    global server_settings
-    global client
-    timers = list()
-    for serv in server_settings.values():
-        if(serv.auto_report and serv.has_guild()):
-            t = Timer(3, auto_report_trigger, args=(serv.server_id,))
-            t.daemon = True
-            t.start()
-            t.name = serv.server_id
-            #print(serv.server_id)
-            timers.append(t)
-    logging.info("Auto report started")
-    return timers
-
-@asyncio.coroutine
-def send_msg(channel, msg):
-    yield from client.send_message(channel, msg)
-
-@asyncio.coroutine
-def check_report_queue():
-    global report_queue
-    global server_settings
-    while(len(report_queue)==0):
-        yield from asyncio.sleep(15)
-    while(len(report_queue)>0):
-        rep = report_queue.popleft()
-        if(rep[2]==0):
-            message = yield from client.send_message(rep[0], embed=rep[1])
-        else:
-            try:
-                message = yield from client.get_message(rep[0],rep[2])
-            except discord.NotFound:
-                message = None
-            if(message is None):
-                message = yield from client.send_message(rep[0], embed=rep[1])
-            else:
-                message = yield from client.edit_message(message, embed=rep[1])
-        server_settings[message.server.id].most_recent_log_summary = message.id
-    asyncio.ensure_future(check_report_queue())
-
-@asyncio.coroutine
-def check_server_memberships():
-    global server_settings
-    yield from asyncio.sleep(3600)
-    active_servers = list([x.id for x in client.servers])
-    for entry in server_settings.values():
-        if entry.server_id not in active_servers:
-            del server_settings[entry.server_id]
-            logging.warning("Server "+entry.server_id + " removed from memory.")
-            # print("Server "+entry.id + " removed from memory.")
-            save_server_settings()
-    asyncio.ensure_future(check_server_memberships())
-
-def report_url(reportID):
-    return "https://www.warcraftlogs.com/reports/{}/".format(reportID)
-
-def parse_message_args(message):
-    if(len(message.content.split(" "))<=1):
-        return {}
-    words = message.content.split(" ",1)[1]
-    args = {}
-    translations = {
-        "dps":"damage-done",
-        "dd":"damage-done",
-        "hps":"healing",
-        "healer":"healing",
-        "heal":"healing",
-        "tank":"damage-taken",
-        "dt":"damage-taken",
-    }
-    for arg in words.split(" "):
-        if(len(arg.split("=",1))==1):
-            continue
-        key=arg.split("=",1)[0].lower()
-        val=arg.split("=",1)[1].lower()
-        if val in translations.keys():
-            val = translations[val]
-        args[key]=val
-    return args
-
-def search_fights(searchkey, fightlist, char=None):
-    #If char given then limit to that chars attended fights
-    if(char is not None):
-        attended_fights = list()
-        for f in fightlist:
-            if(char.attended(f.id)):
-                attended_fights.append(f)
-        fightlist = attended_fights
-    if(searchkey.isdigit()):
-        #Assume its a fight id
-        for f in fightlist:
-            if(f.id == int(searchkey)):
-                return f
-        return None
-    #Assume its a bossname and get kill or latest attempt
-    searchkey = searchable(searchkey.lower())
-    fightlist.reverse()
-    found = False
-    for f in fightlist:
-        if(f.boss!=0 and f.kill and (searchkey in f.name.lower() or searchkey in searchable(f.name.lower()))):
-            return f
-    for f in fightlist:
-        if(searchkey in f.name.lower() or searchkey in searchable(f.name.lower())):
-            return f
-    return None
-
-def table_command(msg):
+async def char_command(message):
     global current_key
     global server_settings
-    args = parse_message_args(msg)
-    view = None if ("view" not in args.keys()) else args["view"]
-    report = "recent" if ("report" not in args.keys()) else args["report"]
-    fight = "all" if ("fight" not in args.keys()) else args["fight"]
-    length = 20 if ("length" not in args.keys()) else int(args["length"])
-    starttime = 0
-    endtime = 0
-    bossid = 0 #0=all
-    if(report == "recent"):
-        report = most_recent_report(msg.server.id)
-    else:
-        report = pcl.wow_get_report(report, key=current_key)
-        logging.info("Requested report "+report.id)
-    endtime=report.end-report.start
-    if(fight!="all"):
-        bossname=None
-        logging.info("Requested fight list for report "+report.id)
-        fightlist=pcl.generate_fight_list(report.id, key=current_key)
-        fight_obj = search_fights(fight, fightlist)
-        if(fight_obj is not None):
-            starttime = fight_obj.start_time
-            endtime = fight_obj.end_time
-            bossname = fight_obj.name.upper()
-            bossid = fight_obj.boss
-        else:
-            yield from client.send_message(msg.channel, "`Please provide a valid fight name or ID.`")
-            return
-    else:
-        bossname = "ALL"
-
-    if(view is None):
-        yield from client.send_message(msg.channel, "`Please provide a view (damage-done, damage-taken, healing).`")
-        return
-    table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime)
-    embed = discord.Embed()
-    logging.info("Requested "+view+" table from report "+str(report.id)+" for server "+str(msg.server.id))
-    title = "**{0}** {1}".format(view.upper(), bossname)
-    embed.title = "{0:<95}{1}".format(title, "|")
-    embed.set_footer(text="Taken from report "+report.id)
-    if(len(table)==0):
-        embed.description="```{}```".format("No results found!")
-        embed.color = discord.Colour.red()
-    elif(view in ["damage-done", "damage-taken", "healing", "summons", "casts"]):
-        # "Total-able" sortable views
-        table.sort(key=lambda x: -x.total)
-        embed.description="```{}```".format(table_string(table, length))
-        embed.color = discord.Colour(colour_map(table[0].type))
-    elif(view in ["deaths"]):
-        # Event-list views
-        embed.description="```{}```".format(table_string(table, length))
-        embed.color = discord.Colour(colour_map(table[0].type))
-    else:
-        embed.description="```{}```".format(view_not_supported_warning)
-        embed.color = discord.Colour.red()
-    if(bossid==0):
-        embed.set_thumbnail(url=zone_image_url.format(report.zone))
-    else:
-        embed.set_thumbnail(url=boss_image_url.format(bossid))
-    yield from client.send_message(msg.channel, embed=embed)
-    return embed
-
-def char_command(msg):
-    global current_key
-    global server_settings
-    args = parse_message_args(msg)
+    args = parse_message_args(message)
+    server = message.guild
     view = None if ("view" not in args.keys()) else args["view"]
     charname = None if ("char" not in args.keys()) else args["char"]
     report = "recent" if ("report" not in args.keys()) else args["report"]
@@ -674,7 +634,7 @@ def char_command(msg):
     charcolor = 0xFFFFFF
     bossid = 0 #0=all
     if(report == "recent"):
-        report = most_recent_report(msg.server.id)
+        report = most_recent_report(server.id)
     else:
         report = pcl.wow_get_report(report, key=current_key)
         logging.info("Requested report "+report.id)
@@ -684,7 +644,7 @@ def char_command(msg):
     attendance_list=get_full_attendance(fightlist)
 
     if(charname is None):
-        yield from client.send_message(msg.channel, "`Please provide a character name (char=<name>).`")
+        await message.channel.send("`Please provide a character name (char=<name>).`")
         return
     char=attendance_list[0]
     for player in attendance_list:
@@ -702,16 +662,16 @@ def char_command(msg):
             bossname = fight_obj.name.upper()
             bossid = fight_obj.boss
         else:
-            yield from client.send_message(msg.channel, "`Please provide a valid fight name or ID (Did {} attend that fight?).`".format(player.name))
+            await message.channel.send("`Please provide a valid fight name or ID (Did {} attend that fight?).`".format(player.name))
             return
     else:
         bossname = "ALL"
 
     if(view is None):
-        yield from client.send_message(msg.channel, "`Please provide a view (damage-done, damage-taken, healing).`")
+        await message.channel.send("`Please provide a view (damage-done, damage-taken, healing).`")
         return
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime, sourceid=char.id)
-    logging.info("Requested {} table for {} from report {} for server {}".format(view,charname,str(report.id),str(msg.server.id)))
+    logging.info("Requested {} table for {} from report {} for server {}".format(view,charname,str(report.id),str(server.id)))
     total = 0
     embed = discord.Embed()
     title = "**{0}** **{1}** {2}".format(charname.upper(), view.upper(), bossname)
@@ -734,13 +694,14 @@ def char_command(msg):
         embed.set_thumbnail(url=zone_image_url.format(report.zone))
     else:
         embed.set_thumbnail(url=boss_image_url.format(bossid))
-    yield from client.send_message(msg.channel, embed=embed)
+    await message.channel.send(embed=embed)
     return embed
 
-def att_command(msg):
+async def att_command(message):
     global current_key
     global server_settings
-    args = parse_message_args(msg)
+    args = parse_message_args(message)
+    server = message.guild
     page_range = 16 if ("range" not in args.keys()) else min(int(args["range"]),16)
     page = 1 if ("page" not in args.keys()) else int(args["page"])
     length = 25 if ("length" not in args.keys()) else int(args["length"])
@@ -748,11 +709,11 @@ def att_command(msg):
     
     #Indexed by name, data is an array of length range with the number of attended fights in report n in array[n]
     full_attendance = dict() 
-    full_report_list = pcl.generate_guild_report_list(server_settings[msg.server.id].guild_name, 
-                                                      server_settings[msg.server.id].guild_realm, 
-                                                      server_settings[msg.server.id].guild_region, 
+    full_report_list = pcl.generate_guild_report_list(server_settings[server.id].guild_name, 
+                                                      server_settings[server.id].guild_realm, 
+                                                      server_settings[server.id].guild_region, 
                                                       key=current_key)
-    logging.info("Requested guild reports for server "+str(msg.server.id))
+    logging.info("Requested guild reports for server "+str(server.id))
     for rep in full_report_list:
         if rep.zone == -1:
             full_report_list.remove(rep)
@@ -785,14 +746,8 @@ def att_command(msg):
     headers = "{0:<13}|{1:<3}|{2}\n".format("NAME"," %",report_days.upper())
     embed.description="```{}{}```".format(headers,attendance_table_string(attendance_rows,length,14))
     embed.set_thumbnail(url=zone_image_url.format(full_report_list[0].zone))
-    yield from client.send_message(msg.channel, embed=embed)
+    await message.channel.send(embed=embed)
     return embed
-
-def searchable(string):
-    for char in string:
-        if char not in " abcdefghijklmnopqrstuvwxyz":
-            string = string.replace(char, "")
-    return string
 
 def get_full_attendance(fightlist):
     players = {}
@@ -803,65 +758,103 @@ def get_full_attendance(fightlist):
                 players[player.id] = player
     return list(players.values())
 
-def shuffle_case(string):
-    upper_string = string.upper()
-    lower_string = string.lower()
-    new_string = ""
-    odd = False
-    for upp,low in zip(upper_string,lower_string):
-        if(odd): new_string = new_string+upp
-        else: new_string = new_string+low
-        odd = not odd
-    return new_string
-
 def get_attendance_percent(array):
     #from an array of fights attended per night, what percent are non-0
     return round(100*(len(array)-array.count(0))/len(array))
 
-def attendance_table_string(table, length, width=18):
-    #Takes a list of tuples formatted as (name,array of attended fights by report, percent attendance)
-    string = ""
-    table.sort(key=lambda x: x[2])
-    table.reverse()
-    for i in range(0,min(length,len(table))):
-        string += attendance_table_string_row(table[i], width)+"\n"
-    return string
+# Command Handling functions
 
-
-def attendance_table_string_row(table_entry,width=18):
-    name = table_entry[0]
-    if(len(name)>width):
-        name = name[:width-3]+"..."
-    format_str = "{0:<{width}}".format(name, width=width)
-    format_str += "{0:<4}".format(table_entry[2])
-    for day in table_entry[1]:
-        if(day==0): format_str+="_"
-        else: format_str+="X"
-    return format_str
-
-def help_command(message):
-    yield from client.send_message(message.channel, help_msg)
-
-def setup_command(message):
-    yield from client.send_message(message.channel, setup_help_msg)
-
-def commands_command(message):
-    if(message.channel.is_private):
-        yield from client.send_message(message.channel, command_list_msg)
+async def initialize_new_server(message):
+    # Handle the initialize command
+    # Create a server settings object for this server
+    global server_settings
+    server = message.guild
+    if server.id in server_settings:
+        return False
     else:
-        yield from client.send_message(message.author, command_list_msg)
+        new_server_info = ServerInfo(server.id)
+        new_server_info.add_admin(message.author.id)
+        new_server_info.set_default_channel(message.channel.id)
+        server_settings[server.id] = new_server_info
+        save_server_settings()
+        await message.channel.send("Server initialized. You are now an admin. This is now the default channel.")
+        logging.info("New server {} initialized.".format(str(server.id)))
+        return True
 
-def report_command(message):
-    yield from client.send_typing(message.channel)
-    if(len(message.content.split(" ")) < 2): 
-        embed = report_summary_embed_long(most_recent_report(message.server.id))
-    else: 
-        report = message.content.split(" ")[1]
-        embed = report_summary_embed_long(get_report(report))
-    yield from client.send_message(message.channel,  embed=embed)
+async def update_server_guild_info(message):
+    # Handle the set guild command
+    # Set the guild_name, guild_realm and guild_region in the server settings
+    global server_settings
+    server = message.guild
+    serv_info = server_settings[server.id]
+    guildname = " ".join(message.content.split(" ")[1:(len(message.content.split(" "))-1)])
+    serv_info.update_guild(guildname, 
+                           message.content.split(guildname+" ")[1].split("-")[0], 
+                           message.content.split(guildname+" ")[1].split("-")[1]
+                           )
+    server_settings[server.id] = serv_info
+    save_server_settings()
+    await message.channel.send("Server guild set to <{} {}-{}>".format(serv_info.guild_name, serv_info.guild_realm, serv_info.guild_region))
+    logging.info("Server {} guild info updated to <{} {}-{}>".format(str(server.id),serv_info.guild_name,serv_info.guild_realm,serv_info.guild_region))
+    return True
 
-def fights_command(message):
-    if(len(message.content.split(" ")) < 2): report = most_recent_report(message.server.id).id
+async def update_server_default_channel(message):
+    # Handle the channel command
+    # Set default channel in server_settings
+    global server_settings
+    server = message.guild
+    serv_info = server_settings[server.id]
+    serv_info.set_default_channel(message.channel.id)
+    server_settings[server.id] = serv_info
+    save_server_settings()
+    await message.channel.send("This is now the default channel!")
+    logging.info("Server {} default channel updated to {}".format(str(server.id),str(message.channel.id)))
+    return True
+
+async def add_server_admin(message):
+    # Handle the admin command
+    # Set default channel in server_settings
+    global server_settings
+    server = message.guild
+    serv_info = server_settings[server.id]
+    for admin in message.mentions:
+        serv_info.add_admin(admin.id)
+        logging.info("Admin {} added to server {}".format(str(admin.id),str(server.id)))
+    server_settings[server.id] = serv_info
+    save_server_settings()
+    await message.channel.send("Admins updated!")
+    return True
+
+async def help_command(message):
+    # Handle the help command
+    await message.channel.send(help_msg)
+
+async def setup_command(message):
+    # Handle the setup command (Instruct on how to initialize)
+    await message.channel.send(setup_help_msg)
+
+async def commands_command(message):
+    # Handle commands command: Show command list
+    if(isinstance(message.channel, discord.abc.GuildChannel)):
+        await message.channel.send(command_list_msg)
+    else:
+        await message.author.send(command_list_msg)
+
+async def report_command(message):
+    # Handle report command
+    # Show most recent report or passed in report
+    with message.channel.typing():
+        if(len(message.content.split(" ")) < 2): 
+            embed = report_summary_embed_long(most_recent_report(message.guild.id))
+        else: 
+            report = message.content.split(" ")[1]
+            embed = report_summary_embed_long(get_report(report))
+        await message.channel.send(embed=embed)
+
+async def fights_command(message):
+    # Handle fights command
+    # Show fights from most recent report or passed in report
+    if(len(message.content.split(" ")) < 2): report = most_recent_report(message.guild.id).id
     else: report = message.content.split(" ")[1]
     fightlist = pcl.generate_fight_list(report, key=current_key)
     string = fight_list_string_long(fightlist)
@@ -874,47 +867,80 @@ def fights_command(message):
         if hasattr(fight, "difficulty"):
             difficulty=max(difficulty, fight.difficulty)
     embed.colour = discord.Colour(colour_map(get_difficulty(difficulty)))
-    print(zone_image_url.format(report_obj.zone))
     embed.set_thumbnail(url=zone_image_url.format(report_obj.zone))
-    yield from client.send_message(message.channel, embed=embed)
+    await message.channel.send(embed=embed)
 
-def reset_history_command(message):
+async def reset_history_command(message):
+    # Handle reset command
     # This command can fix corrupted data maybe
-    serv_info = server_settings[message.server.id]
-    serv_info.most_recent_log_start = most_recent_report(message.server.id).start
+    server = message.guild
+    serv_info = server_settings[server.id]
+    serv_info.most_recent_log_start = most_recent_report(server.id).start
     serv_info.most_recent_log_end = serv_info.most_recent_log_start
     serv_info.most_recent_log_summary = 0
-    server_settings[message.server.id] = serv_info
+    server_settings[server.id] = serv_info
     save_server_settings()
 
-def check_command(message):
-    yield from client.send_message(message.channel, "Checking for updates...")
-    auto_report_trigger(message.server.id, refresh=False)
+async def check_command(message):
+    # Handle check command
+    # Force an auto report check without waiting for timer
+    await message.channel.send("Checking for updates...")
+    auto_report_trigger(message.guild.id, refresh=False)
 
-def debug_command(message):
+async def debug_command(message):
+    # Handle debug command
+    # Print out current server settings
     global server_settings
-    yield from client.send_message(message.channel, "```"+str(server_settings[message.server.id])+"```")
+    await message.channel.send("```"+str(server_settings[message.guild.id])+"```")
 
-def dps_shortcut_command(message):
+async def dps_shortcut_command(message):
+    # Handle dps shortcut table command
+    # Act as if table command was called with arg
     message.content = message.content+" view=damage-done"
-    yield from table_command(message)
+    await table_command(message)
 
-def heal_shortcut_command(message):
+async def heal_shortcut_command(message):
+    # Handle healing shortcut table command
+    # Act as if table command was called with arg
     message.content = message.content+" view=healing"
-    yield from table_command(message)
+    await table_command(message)
 
-def tank_shortcut_command(message):
+async def tank_shortcut_command(message):
+    # Handle tanking shortcut table command
+    # Act as if table command was called with arg
     message.content = message.content+" view=damage-taken"
-    yield from table_command(message)
+    await table_command(message)
 
-def colour_map(key):
-    if key in class_colors:
-        return class_colors[key]
-    if key in difficulty_colors:
-        return difficulty_colors[key]
-    else:
-        #Default color
-        return 0x979c9f
+async def toggle_auto_report(message):
+    # Handle auto command
+    # Toggle auto reporting
+    global server_settings
+    global thread_list
+    server = message.guild
+    if not (server_settings[server.id].has_guild()):
+        await message.channel.send("You must set a server guild first!")
+        return
+    server_settings[server.id].toggle_auto_report()
+    save_server_settings()
+    #start thread for server
+    t = Timer(3, auto_report_trigger, args=(server.id,))
+    t.daemon = True
+    t.start()
+    t.name = server.id
+    #print(serv.server_id)
+    thread_list.append(t)
+    logging.info("Auto report set to {} for server {}".format(str(server_settings[server.id].auto_report),str(server.id)))
+    await message.channel.send("Auto Report mode is now set to {}.".format(str(server_settings[server.id].auto_report)))
+
+async def toggle_auto_report_mode(message):
+    # Handle longmode command
+    # Toggle long mode for auto reports
+    global server_settings
+    server = message.guild
+    server_settings[server.id].toggle_auto_report_mode()
+    save_server_settings()
+    logging.info("Long auto report set to {} for server {}".format(str(server_settings[server.id].auto_report_mode_long),str(server.id)))
+    await message.channel.send("Long Auto Report mode is now set to "+str(server_settings[server.id].auto_report_mode_long)+".")
 
 command_set = [
     {
@@ -1061,6 +1087,7 @@ command_set = [
 
 current_key = get_key("warcraftlogs_public_key")
 discord_token = get_key("discord_bot_token")
+if('DISCORD_TOKEN' in os.environ and os.environ['DISCORD_TOKEN']!=None): discord_token = os.environ['DISCORD_TOKEN']
 if(discord_token == None):
     token = input("You must specify the discord bot token: ")
     os.environ['DISCORD_TOKEN'] = token
@@ -1068,6 +1095,7 @@ os.environ['DISCORD_TOKEN'] = discord_token
 if(current_key == None):
     current_key = input("You must specify the WCL API key: ")
 
+# Ensure logfile exists
 file = open("logs/bot.log", "a+")
 file.close()
 logging.basicConfig(filename="logs/bot.log",format="(%(asctime)s) %(levelname)s:%(message)s",level=logging.INFO)

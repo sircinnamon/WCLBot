@@ -46,13 +46,13 @@ class ServerInfo(object):
         self.most_recent_log_summary = messageID
 
     def __str__(self):
-        string = ("server_id="+self.server_id+"\n"
+        string = ("server_id="+str(self.server_id)+"\n"
                + "admins="+str(self.admins)+"\n"
-               + "guild_name="+self.guild_name+"\n"
-               + "guild_realm="+self.guild_realm+"\n"
-               + "guild_region="+self.guild_region+"\n"
+               + "guild_name="+str(self.guild_name)+"\n"
+               + "guild_realm="+str(self.guild_realm)+"\n"
+               + "guild_region="+str(self.guild_region)+"\n"
                + "auto_report="+str(self.auto_report)+"\n"
-               + "default_channel="+self.default_channel+"\n"
+               + "default_channel="+str(self.default_channel)+"\n"
                + "auto_report_mode_long="+str(self.auto_report_mode_long)+"\n"
                + "most_recent_log_start="+str(self.most_recent_log_start)+"\n"
                + "most_recent_log_end="+str(self.most_recent_log_end)+"\n"
