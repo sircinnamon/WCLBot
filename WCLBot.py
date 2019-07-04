@@ -173,9 +173,9 @@ def startup_auto_report():
     return timers
 
 def log_message(message):
-    if(message.guild is not None): print("["+message.guild.name+"/"+message.channel.name+"] "+message.author.name+":")
-    elif(message.channel.is_private and message.channel.type is discord.ChannelType.group): print("[PRIVATE/"+message.channel.name+"] "+message.author.name+":")
-    elif(message.channel.is_private): print("[PRIVATE] "+message.author.name+":")
+    if(isinstance(message.channel, discord.abc.GuildChannel)): print("["+message.guild.name+"/"+message.channel.name+"] "+message.author.name+":")
+    elif(isinstance(message.channel, discord.GroupChannel)): print("[PRIVATE/"+message.channel.name+"] "+message.author.name+":")
+    elif(isinstance(message.channel, discord.abc.PrivateChannel)): print("[PRIVATE] "+message.author.name+":")
     print(message.content)
 
 def get_key(key_name, key_file=".keyfile"):
