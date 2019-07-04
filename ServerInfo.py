@@ -1,7 +1,7 @@
 class ServerInfo(object):
     """Stores server settings and information in an accessible dictionary"""
     def __init__(this, server_id):
-        this.server_id = server_id
+        this.server_id = int(server_id)
         this.admins = []
         this.guild_name = None
         this.guild_realm = None
@@ -44,6 +44,14 @@ class ServerInfo(object):
 
     def update_log_summary(self, messageID):
         self.most_recent_log_summary = messageID
+
+    def enforce_format(self):
+        # Convert certain values to integers
+        self.server_id = int(self.server_id)
+        self.admins = list(map(lambda x: int(x), self.admins))
+        self.default_channel = int(self.default_channel)
+        self.most_recent_log_summary = int(self.most_recent_log_summary)
+
 
     def __str__(self):
         string = ("server_id="+str(self.server_id)+"\n"

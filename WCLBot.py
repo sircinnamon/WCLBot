@@ -139,6 +139,9 @@ def load_server_settings():
         pkl_file = open(server_settings_file, 'rb')
         server_settings = pickle.load(pkl_file)
         pkl_file.close()
+    # Enforce format of server settings objects (Ensure old string snowflake ids work)
+    for s_id in server_settings:
+        server_settings[s_id].enforce_format()
 
 def user_is_admin(userID, serverID):
     global server_settings
