@@ -121,7 +121,7 @@ async def on_message(message):
 
 @client.event
 async def on_voice_state_update(member, before, after):
-    print("Voice state change for user " + member.nick)
+    print("Voice state change for user " + member.display_name)
 
 # Internal helper functions
 
