@@ -118,6 +118,7 @@ async def on_message(message):
                     else:
                         logging.info("Command went through: '{}'".format(message.content))
                         await command["function"](message)
+                    return # Avoid running if message matches more than 1 command (i.e. !wheal/!whealing)
 
 @client.event
 async def on_voice_state_update(member, before, after):
