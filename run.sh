@@ -1,15 +1,16 @@
 #!/bin/bash
 
-if [ -d "logs" ]; then
+if [ ! -d "logs" ]; then
 	mkdir "logs"
 fi
 
-if [ -d "serverdata" ]; then
+if [ ! -d "serverdata" ]; then
 	mkdir "serverdata"
 fi
 
 if [ ! -e ".keyfile" ]; then
 	echo "Keyfile missing: '.keyfile'"
+	exit 1
 fi
 
 docker stop wcl
@@ -20,4 +21,5 @@ docker run \
 	-v $(pwd)/serverdata:/WCL/serverdata \
 	-v $(pwd)/logs:/WCL/logs \
 	-v $(pwd)/.keyfile:/WCL/.keyfile \
+	-v /etc/localtime:/etc/localtime:ro \
 	wclbot:latest

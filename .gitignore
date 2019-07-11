@@ -9,3 +9,5 @@ logs/*
 pycraftlogs_*
 *.sublime*
 virtualenv
+serverdata
+serverdata/*
