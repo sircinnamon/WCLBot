@@ -531,7 +531,7 @@ async def table_command(msg):
 
 def auto_report_trigger(serverID, refresh=True):
     # print("Timer fired for server "+serverID, flush=True)
-    logging.info("Auto Report timer fired for server {}".format(serverID))
+    logging.debug("Auto Report timer fired for server {}".format(serverID))
     global server_settings
     global current_key
     global thread_list
@@ -557,7 +557,7 @@ def auto_report_trigger(serverID, refresh=True):
                                                  serv_info.guild_region, 
                                                  start=serv_info.most_recent_log_start,
                                                  key=current_key)
-        logging.info("Requested guild reports for server "+str(serverID))
+        logging.debug("Requested guild reports for server "+str(serverID))
         real_reports = []
         for r in reports:
             #ignore empty logs
@@ -567,8 +567,8 @@ def auto_report_trigger(serverID, refresh=True):
         real_reports.reverse()
         reports = real_reports
         # reports[0] should be the one previously known as most recent
-        logging.info("Reports found for server: {}".format(", ".join(item.id for item in reports)))
         if(len(reports)>0 and int(reports[0].end) > serv_info.most_recent_log_end):
+            logging.info("Reports found for server: {}".format(", ".join(item.id for item in reports)))
             # Most recently seen report has an end time later than we know about
             if(serv_info.most_recent_log_end == 0):
                 #just set it and forget it
