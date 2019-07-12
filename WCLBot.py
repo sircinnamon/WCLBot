@@ -107,22 +107,25 @@ async def on_message(message):
         for command_str in command["commands"]:
             if message.content.startswith(CMD_PREFIX+command_str):
                 with message.channel.typing():
+                    logging.debug("Command {} matched message '{}'".format(command_str, message.content))
+
                     if(not command["allow_private"] and isinstance(message.channel, discord.abc.PrivateChannel)):
-                        logging.info("Blocked command: '{}'".format(message.content))
-                        logging.info("Channel: '{}\nis GuildChannel: {}\nis Privatechannel: {}'".format(message.content,isinstance(message.channel, discord.abc.GuildChannel),isinstance(message.channel, discord.abc.PrivateChannel)))
+                        logging.info("Blocked command (not allowed in PM): [{}/{}] '{}'".format(message.author.display_name, message.author.id, message.content))
                         await message.channel.send(shuffle_case(message.clean_content)+" "+private_message_warning)
                     elif(command["admin_only"] and not user_is_admin(message.author.id, message.guild.id)):
+                        logging.info("Block command (not an admin): [{}/{}] '{}'".format(message.author.display_name, message.author.id, message.content))
                         await message.channel.send(admin_only_warning)
                     elif(command["require_initialized"] and not server_is_registered(message.guild.id)):
+                        logging.info("Block command (server not initialized: [{}/{}] '{}'".format(message.author.display_name, message.author.id, message.content))
                         await message.channel.send(serv_not_registered_msg)
                     else:
-                        logging.info("Command went through: '{}'".format(message.content))
+                        logging.info("Executing command: '{}'".format(message.content))
                         await command["function"](message)
                     return # Avoid running if message matches more than 1 command (i.e. !wheal/!whealing)
 
 @client.event
 async def on_voice_state_update(member, before, after):
-    print("Voice state change for user " + member.display_name)
+    logging.debug("Voice state change for user {}".format(member.display_name))
 
 # Internal helper functions
 
@@ -143,6 +146,7 @@ def load_server_settings():
     # Enforce format of server settings objects (Ensure old string snowflake ids work)
     for s_id in server_settings:
         server_settings[s_id].enforce_format()
+        logging.debug("Current server settings for [{}]\n{}".format(s_id, str(server_settings[s_id])))
         if(isinstance(s_id, str)):
             server_settings[int(s_id)]=server_settings[s_id]
             del server_settings[s_id]
@@ -168,7 +172,7 @@ def startup_auto_report():
             t.start()
             t.name = serv.server_id
             timers.append(t)
-            logging.info("Report timer started for {} {}-{}[{}]".format(
+            logging.info("Report timer started for <{} {}-{}>[{}]".format(
                 serv.guild_name, 
                 serv.guild_realm, 
                 serv.guild_region, 
@@ -229,8 +233,9 @@ def report_summary_embed_long(report):
     global current_key
     embed = report_summary_embed(report)
     try:
+        logging.info("Requesting report {} summary".format(report.id))
         fightlist = pcl.generate_fight_list(report.id, key=current_key)
-        logging.info("Requested fight list for report "+report.id)
+        logging.debug("Requested fight list for report "+report.id)
         if(len(fightlist)==0):raise ValueError("Fight list array is empty.")
         fightlist_str = fight_list_string_short(fightlist)
         if(len(fightlist_str)==0):raise ValueError("No boss fights found.")
@@ -239,13 +244,13 @@ def report_summary_embed_long(report):
                         inline=False)
 
         topdmg_table = pcl.wow_report_tables("damage-done", report.id, key=current_key, end=report.end-report.start)
-        logging.info("Requested damage-done table for report "+report.id)
+        logging.debug("Requested damage-done table for report "+report.id)
         embed.add_field(name="Top DPS", 
                         value="```"+table_string(topdmg_table, 3)+"```", 
                         inline=False)
         
         topheal_table = pcl.wow_report_tables("healing", report.id, key=current_key, end=report.end-report.start)
-        logging.info("Requested healing table for report "+report.id)
+        logging.debug("Requested healing table for report "+report.id)
         embed.add_field(name="Top Healers", 
                         value="```"+table_string(topheal_table, 3)+"```", 
                         inline=False)
@@ -261,6 +266,7 @@ def report_summary_embed_long(report):
     return embed
 
 def fight_list_string_short(fightlist):
+    logging.debug("Called fight_list_string_short")
     string = ""
     newlist = list()
     for fight in fightlist:
@@ -279,6 +285,7 @@ def fight_list_string_short(fightlist):
     return string
 
 def fight_list_string_long(fightlist):
+    logging.debug("Called fight_list_string_long")
     string = ""
     for fight in fightlist:
         if(fight.boss != 0):
@@ -294,6 +301,7 @@ def fight_list_string_long(fightlist):
 def table_string(table, length, name_width=18, total=0):
     #Takes a table with a total (healing, damage-done, damage-taken, casts and summons)
     #Works for any set of entries with a total and a name
+    logging.debug("Called table_string")
     string = ""
     if(len(table) > 0 and hasattr(table[0], "total")):
         table.sort(key=lambda x: x.total)
@@ -311,6 +319,7 @@ def table_string(table, length, name_width=18, total=0):
 
 
 def table_string_row_total(table_entry, total, width=18):
+    logging.debug("Called table_string_row_total")
     name = table_entry.name
     if(len(name)>width):
         name = name[:width-3]+"..."
@@ -320,6 +329,7 @@ def table_string_row_total(table_entry, total, width=18):
     return format_str
 
 def table_string_row_time(table_entry, width=18):
+    logging.debug("Called table_string_row_time")
     name = table_entry.name
     if(len(name)>width):
         name = name[:width-3]+"..."
@@ -329,6 +339,7 @@ def table_string_row_time(table_entry, width=18):
 
 def attendance_table_string(table, length, width=18):
     #Takes a list of tuples formatted as (name,array of attended fights by report, percent attendance)
+    logging.debug("Called attendance_table_string")
     string = ""
     table.sort(key=lambda x: x[2])
     table.reverse()
@@ -338,6 +349,7 @@ def attendance_table_string(table, length, width=18):
 
 
 def attendance_table_string_row(table_entry,width=18):
+    logging.debug("Called attendance_table_string_row")
     name = table_entry[0]
     if(len(name)>width):
         name = name[:width-3]+"..."
@@ -422,8 +434,10 @@ async def check_report_queue():
     while(len(report_queue)==0):
         await asyncio.sleep(15)
     while(len(report_queue)>0):
+        logging.debug("Entries found in report_queue")
         rep = report_queue.popleft()
         if(rep[2]==0):
+            logging.debug("Sending new message from report_queue")
             message = await rep[0].send(embed=rep[1])
         else:
             try:
@@ -431,9 +445,12 @@ async def check_report_queue():
             except discord.NotFound:
                 message = None
             if(message is None):
+                logging.warning("Wanted to edit message {}, was not found!".format(rep[2]))
                 message = await rep[0].send(embed=rep[1])
             else:
+                logging.info("Editing message {} with updates".format(rep[2]))
                 message = await message.edit(embed=rep[1])
+        logging.debug("Updating server [{}] most recent log id = {}".format(message.guild.id, message.id))
         server_settings[message.guild.id].most_recent_log_summary = message.id
     asyncio.create_task(check_report_queue())
 
@@ -454,7 +471,7 @@ async def check_server_memberships():
 def get_report(reportID):
     global current_key
     report = pcl.wow_get_report(reportID, key=current_key)
-    logging.info("Requested report "+reportID)
+    logging.debug("Requested report {}".format(reportID))
     return report
 
 def most_recent_report(serverID):
@@ -465,7 +482,7 @@ def most_recent_report(serverID):
         return None
     else:
         reports = pcl.generate_guild_report_list(info.guild_name, info.guild_realm, info.guild_region, key=current_key)
-        logging.info("Requested guild reports for server {}".format(serverID))
+        logging.debug("Requested guild reports for server {}".format(serverID))
         return reports[0]
 
 async def table_command(msg):
@@ -483,11 +500,11 @@ async def table_command(msg):
         report = most_recent_report(msg.guild.id)
     else:
         report = pcl.wow_get_report(report, key=current_key)
-        logging.info("Requested report "+report.id)
+        logging.debug("Requested report {}".format(report.id))
     endtime=report.end-report.start
     if(fight!="all"):
         bossname=None
-        logging.info("Requested fight list for report "+report.id)
+        logging.debug("Requested fight list for report {}".format(report.id))
         fightlist=pcl.generate_fight_list(report.id, key=current_key)
         fight_obj = search_fights(fight, fightlist)
         if(fight_obj is not None):
@@ -496,17 +513,19 @@ async def table_command(msg):
             bossname = fight_obj.name.upper()
             bossid = fight_obj.boss
         else:
+            logging.info("Could not generate table: no matching fight name")
             await msg.channel.send("`Please provide a valid fight name or ID.`")
             return
     else:
         bossname = "ALL"
 
     if(view is None):
+        logging.info("Could not generate table: no view")
         await msg.channel.send("`Please provide a view (damage-done, damage-taken, healing).`")
         return
     table = pcl.wow_report_tables(view, report.id, key=current_key, start=starttime, end=endtime)
     embed = discord.Embed()
-    logging.info("Requested "+view+" table from report "+str(report.id)+" for server "+str(msg.guild.id))
+    logging.info("Requested {} table from report {} for server {}".format(view, report.id, msg.guild.id))
     title = "**{0}** {1}".format(view.upper(), bossname)
     embed.title = "{0:<95}{1}".format(title, "|")
     embed.set_footer(text="Taken from report "+report.id)
@@ -546,10 +565,12 @@ def auto_report_trigger(serverID, refresh=True):
     serv_info = server_settings[serverID]
     if(serv_info.auto_report == False):
         #Cancel the auto report without refreshing
+        logging.debug("Auto reports disabled for server {}".format(serverID))
         return
     elif(serv_info.most_recent_log_start == 0):
         #If it's never been run, dont report old logs
         serv_info.most_recent_log_start = most_recent_report(serverID).start
+        logging.debug("Most recent log unset for server {}. Setting to {}".format(serverID, serv_info.most_recent_log_start))
     #Check for reports after and including the newest known
     #if newest known has a later end time, check it again and update report
     #if newer reports exist, summarize them and send
@@ -571,7 +592,6 @@ def auto_report_trigger(serverID, refresh=True):
         reports = real_reports
         # reports[0] should be the one previously known as most recent
         if(len(reports)>0 and int(reports[0].end) > serv_info.most_recent_log_end):
-            logging.info("Reports found for server: {}".format(", ".join(item.id for item in reports)))
             # Most recently seen report has an end time later than we know about
             if(serv_info.most_recent_log_end == 0):
                 #just set it and forget it
@@ -585,7 +605,7 @@ def auto_report_trigger(serverID, refresh=True):
                     embed = report_summary_embed(reports[0])
                 channel = discord.utils.get(client.get_all_channels(), id=serv_info.default_channel)
                 messageID = server_settings[serverID].most_recent_log_summary
-                logging.info("Edit report to message {}".format(messageID))
+                logging.debug("Edit report to message {}".format(messageID))
                 report_queue.append((channel, embed, messageID)) #edit message messageID to be this info now
         for r in reports[1:]:
             # For completely new reports
@@ -599,6 +619,7 @@ def auto_report_trigger(serverID, refresh=True):
         if(len(reports) > 0 and (reports[-1].end-reports[-1].start > 1000) and (reports[-1].end > serv_info.most_recent_log_end)):
             serv_info.update_recent_log(reports[-1].start,reports[-1].end)
             server_settings[serverID] = serv_info
+            logging.debug("Server {} most recent report updated: start={}, end={}, messageid={}".format(serverID, reports[-1].start, reports[-1].end, server_settings[serverID].most_recent_log_summary))
             save_server_settings()
     except HTTPError as ex:
         # print("HTTP Error: "+str(HTTPError))
@@ -647,13 +668,14 @@ async def char_command(message):
         report = most_recent_report(server.id)
     else:
         report = pcl.wow_get_report(report, key=current_key)
-        logging.info("Requested report "+report.id)
+        logging.debug("Requested report {} for char_command".format(report.id))
     endtime=report.end-report.start
     fightlist=pcl.generate_fight_list(report.id, key=current_key)
-    logging.info("Requested fight list for report "+report.id)
+    logging.debug("Requested fight list for report {} for char command".format(report.id))
     attendance_list=get_full_attendance(fightlist)
 
     if(charname is None):
+        logging.info("Could not generate char table: no character name")
         await message.channel.send("`Please provide a character name (char=<name>).`")
         return
     char=attendance_list[0]
@@ -672,6 +694,7 @@ async def char_command(message):
             bossname = fight_obj.name.upper()
             bossid = fight_obj.boss
         else:
+            logging.info("Could not generate char table: no matching fight with that character")
             await message.channel.send("`Please provide a valid fight name or ID (Did {} attend that fight?).`".format(player.name))
             return
     else:
@@ -723,7 +746,7 @@ async def att_command(message):
                                                       server_settings[server.id].guild_realm, 
                                                       server_settings[server.id].guild_region, 
                                                       key=current_key)
-    logging.info("Requested guild reports for server "+str(server.id))
+    logging.debug("Requested guild reports for server {} for attendance command".format(server.id))
     for rep in full_report_list:
         if rep.zone == -1:
             full_report_list.remove(rep)
@@ -732,7 +755,7 @@ async def att_command(message):
         report = full_report_list[i]
         report_days += datetime.datetime.fromtimestamp((report.start/1000)-18000).strftime('%a')[0]
         fightlist=pcl.generate_fight_list(report.id, key=current_key)
-        logging.info("Requested fight list for report "+str(report.id))
+        logging.debug("Requested fight list for report {} for attendance command".format(report.id))
         attendance_list=get_full_attendance(fightlist)
         for player in attendance_list:
             if player.name not in full_attendance:
@@ -805,7 +828,7 @@ async def update_server_guild_info(message):
     server_settings[server.id] = serv_info
     save_server_settings()
     await message.channel.send("Server guild set to <{} {}-{}>".format(serv_info.guild_name, serv_info.guild_realm, serv_info.guild_region))
-    logging.info("Server {} guild info updated to <{} {}-{}>".format(str(server.id),serv_info.guild_name,serv_info.guild_realm,serv_info.guild_region))
+    logging.info("Server {} guild info updated to <{} {}-{}>".format(server.id,serv_info.guild_name,serv_info.guild_realm,serv_info.guild_region))
     return True
 
 async def update_server_default_channel(message):
@@ -818,7 +841,7 @@ async def update_server_default_channel(message):
     server_settings[server.id] = serv_info
     save_server_settings()
     await message.channel.send("This is now the default channel!")
-    logging.info("Server {} default channel updated to {}".format(str(server.id),str(message.channel.id)))
+    logging.info("Server {} default channel updated to {}".format(server.id,message.channel.id))
     return True
 
 async def add_server_admin(message):
@@ -829,7 +852,7 @@ async def add_server_admin(message):
     serv_info = server_settings[server.id]
     for admin in message.mentions:
         serv_info.add_admin(admin.id)
-        logging.info("Admin {} added to server {}".format(str(admin.id),str(server.id)))
+        logging.info("Admin {} added to server {}".format(admin.id,server.id))
     server_settings[server.id] = serv_info
     save_server_settings()
     await message.channel.send("Admins updated!")
@@ -868,7 +891,7 @@ async def fights_command(message):
     else: report = message.content.split(" ")[1]
     fightlist = pcl.generate_fight_list(report, key=current_key)
     string = fight_list_string_long(fightlist)
-    logging.info("Requested fight list for report "+report)
+    logging.debug("Requested fight list for report {} for fights command".format(report))
     report_obj = get_report(report)
     embed = report_summary_embed(report_obj)
     embed.description="```"+string+"```"
@@ -884,6 +907,7 @@ async def reset_history_command(message):
     # Handle reset command
     # This command can fix corrupted data maybe
     server = message.guild
+    logging.warning("Resetting report history for server {}".format(server.id))
     serv_info = server_settings[server.id]
     serv_info.most_recent_log_start = most_recent_report(server.id).start
     serv_info.most_recent_log_end = serv_info.most_recent_log_start
@@ -951,6 +975,18 @@ async def toggle_auto_report_mode(message):
     save_server_settings()
     logging.info("Long auto report set to {} for server {}".format(str(server_settings[server.id].auto_report_mode_long),str(server.id)))
     await message.channel.send("Long Auto Report mode is now set to "+str(server_settings[server.id].auto_report_mode_long)+".")
+
+async def toggle_loglevel_command(message):
+    level="UNKNOWN"
+    if(logging.getLogger().getEffectiveLevel()!=logging.INFO):
+        logging.getLogger().setLevel(logging.INFO)
+        level="INFO"
+    else:
+        logging.getLogger().setLevel(logging.DEBUG)
+        level="DEBUG"
+    await message.channel.send("Log level set to {}".format(level))
+    logging.info("Log level set to {}".format(level))
+    return
 
 command_set = [
     {
@@ -1092,6 +1128,13 @@ command_set = [
         "allow_private": False,
         "admin_only": True,
         "require_initialized": True,
+    },
+    {
+        "commands":["loglevel",],
+        "function": toggle_loglevel_command,
+        "allow_private": False, # Cant be private and admin only...
+        "admin_only": True,
+        "require_initialized": False,
     },
 ]
 
