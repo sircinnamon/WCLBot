@@ -16,7 +16,7 @@ fi
 docker stop wcl
 docker rm wcl
 docker run \
-	-d --rm \
+	-d \
 	--name wcl \
 	-v $(pwd)/serverdata:/WCL/data \
 	-v $(pwd)/logs:/WCL/logs \

@@ -5,4 +5,4 @@ RUN pip install git+https://github.com/sircinnamon/pycraftlogs.git
 ADD WCLBot.py /WCL/WCLBot.py
 ADD ServerInfo.py /WCL/ServerInfo.py
 WORKDIR /WCL/
-CMD python /WCL/WCLBot.py
+CMD python -u /WCL/WCLBot.py

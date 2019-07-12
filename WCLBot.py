@@ -180,7 +180,10 @@ def log_message(message):
     if(isinstance(message.channel, discord.abc.GuildChannel)): print("["+message.guild.name+"/"+message.channel.name+"] "+message.author.name+":")
     elif(isinstance(message.channel, discord.GroupChannel)): print("[PRIVATE/"+message.channel.name+"] "+message.author.name+":")
     elif(isinstance(message.channel, discord.abc.PrivateChannel)): print("[PRIVATE] "+message.author.name+":")
-    print(message.content)
+    for line in message.clean_content.split("\n")[:-1]:
+        print("│ {}".format(line))
+    print("└ {}".format(message.clean_content.split("\n")[-1]))
+
 
 def get_key(key_name, key_file=".keyfile"):
     try:
