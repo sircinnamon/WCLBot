@@ -449,7 +449,7 @@ async def check_report_queue():
                 message = await rep[0].send(embed=rep[1])
             else:
                 logging.info("Editing message {} with updates".format(rep[2]))
-                message = await message.edit(embed=rep[1])
+                await message.edit(embed=rep[1])
         logging.debug("Updating server [{}] most recent log id = {}".format(message.guild.id, message.id))
         server_settings[message.guild.id].most_recent_log_summary = message.id
     asyncio.create_task(check_report_queue())
