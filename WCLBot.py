@@ -89,7 +89,12 @@ async def on_ready():
         print("* {} ({})".format(server.name,server.id))
     print('------')
     logging.info("Logged in successfully")
+    # Cancel any existing threads (if client lost connection and is becoming ready again)
+    if(thread_list and len(thread_list)>0):
+        for t in thread_list: t.cancel()
+    # Start up auto report timers for servers with enabled autoreport
     thread_list = startup_auto_report()
+    # Add looping tasks to check for messages to print and servers to delete
     asyncio.create_task(check_report_queue())
     asyncio.create_task(check_server_memberships())
     await client.change_presence(activity=discord.Activity(name='WarcraftLogs'))
