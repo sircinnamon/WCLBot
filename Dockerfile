@@ -1,5 +1,5 @@
-FROM python:3.7.4-alpine
-RUN pip install discord requests
+FROM python:3.8.6-alpine
+RUN MULTIDICT_NO_EXTENSIONS=1 YARL_NO_EXTENSIONS=1 pip install discord requests
 RUN apk add git
 RUN pip install git+https://github.com/sircinnamon/pycraftlogs.git
 ADD WCLBot.py /WCL/WCLBot.py
