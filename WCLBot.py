@@ -756,7 +756,13 @@ async def att_command(message):
         if rep.zone == -1:
             full_report_list.remove(rep)
     report_days=""
-    for i in range((page-1)*(page_range),(page*page_range)):
+    if(len(full_report_list)==0):
+        message.channel.send(content="No valid reports found!")
+        return
+    start_rep_index = (page-1)*(page_range)
+    # One page length, unless fewer remain
+    end_rep_index = min((page*page_range), len(full_report_list))
+    for i in range(start_rep_index, end_rep_index):
         report = full_report_list[i]
         report_days += datetime.datetime.fromtimestamp((report.start/1000)-18000).strftime('%a')[0]
         fightlist=pcl.generate_fight_list(report.id, key=current_key)
@@ -764,9 +770,8 @@ async def att_command(message):
         attendance_list=get_full_attendance(fightlist)
         for player in attendance_list:
             if player.name not in full_attendance:
-                full_attendance[player.name] = [0]*page_range
+                full_attendance[player.name] = [0]*(len(full_report_list))
             full_attendance[player.name][i-(page-1)*(page_range)] = len(player.fights.attendedFights)
-
     attendance_rows = [(x[0],x[1],get_attendance_percent(x[1])) for x in list(full_attendance.items())]
     attendance_rows.sort(key=lambda x: x[0])
     attendance_rows.sort(key=lambda x: x[2])
@@ -775,8 +780,8 @@ async def att_command(message):
     #     print(row[0]+" "+str(row[2]))
     if(length==0):length=len(attendance_rows)
 
-    startdate = datetime.datetime.fromtimestamp((full_report_list[(page-1)*(page_range)].start/1000)-18000).strftime('%Y-%m-%d')
-    enddate = datetime.datetime.fromtimestamp((full_report_list[(page)*(page_range)].start/1000)-18000).strftime('%Y-%m-%d')
+    startdate = datetime.datetime.fromtimestamp((full_report_list[start_rep_index].start/1000)-18000).strftime('%Y-%m-%d')
+    enddate = datetime.datetime.fromtimestamp((full_report_list[end_rep_index-1].start/1000)-18000).strftime('%Y-%m-%d')
     embed = discord.Embed()
     embed.title = "{0:<95}|".format("Attendance Chart")
     embed.set_footer(text=startdate+" to "+enddate)
