@@ -11,3 +11,4 @@ pycraftlogs_*
 virtualenv
 serverdata
 serverdata/*
+sftp-config.json

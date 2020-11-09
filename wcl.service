@@ -1,0 +1,19 @@
+[Unit]
+Description=WCL Container
+After=docker.service
+Requires=docker.service
+
+[Service]
+TimeoutStartSec=0
+Restart=always
+ExecStartPre=-/usr/bin/docker stop wcl
+ExecStartPre=-/usr/bin/docker rm wcl
+ExecStart=/usr/bin/docker run --name wcl \
+	-v /etc/WCLBot/serverdata:/WCL/data \
+	-v /etc/WCLBot/.keyfile:/WCL/.keyfile \
+	-v /etc/localtime:/etc/localtime:ro \
+	-v /var/log/WCLBot:/WCL/logs \
+	wclbot:latest
+
+[Install]
+WantedBy=multi-user.target
