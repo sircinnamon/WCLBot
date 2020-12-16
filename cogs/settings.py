@@ -57,6 +57,17 @@ class Settings(commands.Cog):
 		self.settings.save_to_file()
 		await ctx.send("Server guild set to <{} {}-{}>".format(gName, gServer, gReg))
 
+	@commands.command()
+	@commands.guild_only()
+	@admin_only()
+	@initialized_only()
+	async def channel(self, ctx):
+		ss = self.settings[ctx.guild.id]
+		ss.set_default_channel(ctx.channel.id)
+		self.settings[ctx.guild.id] = ss
+		self.settings.save_to_file()
+		await ctx.send("This is now the default channel!")
+
 
 def setup(bot):
 	bot.add_cog(Settings(bot))
