@@ -9,8 +9,11 @@ import logging
 import json
 import signal
 import ApiConnector
+from ServerInfo import ServerInfoSet, ServerInfo
 
 CMD_PREFIX = "!w"
+SERVERINFO_FILE = "data/server_settings.pkl"
+server_settings = ServerInfoSet.load_from_file(SERVERINFO_FILE)
 
 client = Bot(CMD_PREFIX)
 
