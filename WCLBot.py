@@ -53,4 +53,8 @@ logging.info("Logging configured.")
 
 wcl = ApiConnector.ApiConnector(keys["client_id"], keys["client_secret"], logging)
 
+client.load_extension("cogs.settings")
+client.load_extension("cogs.auth")
+client.get_cog("Settings").initSettings(server_settings)
+
 client.run(keys["discord_token"])

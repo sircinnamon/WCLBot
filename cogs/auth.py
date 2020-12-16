@@ -1,0 +1,25 @@
+from discord.ext import commands
+from discord import TextChannel
+
+class Auth(commands.Cog):
+	def __init__(self, bot):
+			self.bot = bot
+
+	def adminCheck(self, ctx):
+		settings = ctx.bot.get_cog("Settings").settings
+		author = ctx.message.author.id
+		if not isinstance(ctx.message.channel, TextChannel):
+			return False
+		serv = ctx.message.guild.id
+		if(serv not in settings): return False
+		if(author in settings[serv].admins):
+			return True
+		return	False
+
+	def initCheck(self, ctx):
+		settings = ctx.bot.get_cog("Settings").settings
+		serv = ctx.message.guild.id
+		if(serv not in settings): return False
+
+def setup(bot):
+	bot.add_cog(Auth(bot))
