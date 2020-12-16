@@ -5,7 +5,7 @@ class Auth(commands.Cog):
 	def __init__(self, bot):
 			self.bot = bot
 
-	def adminCheck(self, ctx):
+	def admin_only(self, ctx):
 		settings = ctx.bot.get_cog("Settings").settings
 		author = ctx.message.author.id
 		if not isinstance(ctx.message.channel, TextChannel):
@@ -16,10 +16,11 @@ class Auth(commands.Cog):
 			return True
 		return	False
 
-	def initCheck(self, ctx):
+	def initialized_only(self, ctx):
 		settings = ctx.bot.get_cog("Settings").settings
 		serv = ctx.message.guild.id
 		if(serv not in settings): return False
+		return True
 
 def setup(bot):
 	bot.add_cog(Auth(bot))
