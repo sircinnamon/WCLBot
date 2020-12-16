@@ -15,6 +15,11 @@ class ServerInfoSet(MutableMapping):
 				if not isinstance(inst, ServerInfoSet): return ServerInfoSet()
 				inst.file = file
 				return inst
+		else:
+			sis = ServerInfoSet()
+			sis.file = file
+			sis.save_to_file()
+			return sis
 
 	def save_to_file(self, file=None):
 		if(file): self.file = file
