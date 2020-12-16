@@ -68,6 +68,39 @@ class Settings(commands.Cog):
 		self.settings.save_to_file()
 		await ctx.send("This is now the default channel!")
 
+	@commands.command()
+	@commands.guild_only()
+	@admin_only()
+	@initialized_only()
+	async def admin(self, ctx):
+		ss = self.settings[ctx.guild.id]
+		for member in ctx.message.mentions:
+			ss.add_admin(member.id)
+		self.settings[ctx.guild.id] = ss
+		self.settings.save_to_file()
+		await ctx.send("Admins added!")
+
+	@commands.command()
+	@commands.guild_only()
+	@admin_only()
+	@initialized_only()
+	async def unadmin(self, ctx):
+		ss = self.settings[ctx.guild.id]
+		rank = ss.admins.index(ctx.message.author.id)
+		for member in ctx.message.mentions:
+			rmrank = ss.admins.index(member.id)
+			if(rmrank == -1):
+				await ctx.send("{} is not an admin!".format(member.nick))
+			elif(rmrank < rank):
+				await ctx.send("{} outranks you!".format(member.nick))
+			elif(len(ss.admins) == 1):
+				await ctx.send("{} is the only admin! Can't remove them.".format(member.nick))
+			else:
+				ss.remove_admin(member.id)
+		self.settings[ctx.guild.id] = ss
+		self.settings.save_to_file()
+		await ctx.send("Admins updated!")
+
 
 def setup(bot):
 	bot.add_cog(Settings(bot))

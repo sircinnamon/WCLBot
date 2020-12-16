@@ -72,6 +72,10 @@ class ServerInfo(object):
 	def add_admin(self, userID):
 		self.admins.append(userID)
 
+	def remove_admin(self, userID):
+		if(userID in self.admins):
+			self.admins.remove(userID)
+
 	def set_default_channel(self, channelID):
 		self.default_channel = channelID
 		self.most_recent_log_summary = 0
