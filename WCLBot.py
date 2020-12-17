@@ -58,5 +58,7 @@ client.get_cog("Logger").init(logging)
 client.load_extension("cogs.settings")
 client.load_extension("cogs.auth")
 client.get_cog("Settings").initSettings(server_settings)
+client.load_extension("cogs.wcl")
+client.get_cog("WCL").init(wcl)
 
 client.run(keys["discord_token"])

@@ -29,8 +29,8 @@ class Settings(commands.Cog):
 	def loginfo(self, *args):
 		return self.bot.get_cog("Logger").info(*args)
 
-	def logwarn(self, *args):
-		return self.bot.get_cog("Logger").warn(*args)
+	def logwarning(self, *args):
+		return self.bot.get_cog("Logger").warning(*args)
 
 	@commands.command(aliases=["set", "setty", "debug"])
 	@commands.guild_only()
@@ -161,7 +161,7 @@ class Settings(commands.Cog):
 		ss.most_recent_log_summary = 0
 		self.settings[ctx.guild.id] = ss
 		self.settings.save_to_file()
-		self.logwarn("Restting report history for server {}".format(ctx.guild.id))
+		self.logwarning("Restting report history for server {}".format(ctx.guild.id))
 		await ctx.send("Reset server history.")
 
 

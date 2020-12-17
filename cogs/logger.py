@@ -37,9 +37,13 @@ class Logger(commands.Cog):
 		if(self.logger):
 			return self.logger.info(*args)
 
-	def warn(self, *args):
+	def warning(self, *args):
 		if(self.logger):
 			return self.logger.warning(*args)
+
+	def error(self, *args):
+		if(self.logger):
+			return self.logger.error(*args)
 
 
 def setup(bot):
