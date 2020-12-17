@@ -26,6 +26,12 @@ class Settings(commands.Cog):
 				return ctx.bot.get_cog("Auth").guild_defined(ctx)
 		return commands.check(pred)
 
+	def loginfo(self, *args):
+		return self.bot.get_cog("Logger").info(*args)
+
+	def logwarn(self, *args):
+		return self.bot.get_cog("Logger").warn(*args)
+
 	@commands.command(aliases=["set", "setty", "debug"])
 	@commands.guild_only()
 	@admin_only()
@@ -43,6 +49,7 @@ class Settings(commands.Cog):
 		new_server_info.set_default_channel(ctx.message.channel.id)
 		self.settings[ctx.guild.id] = new_server_info
 		self.settings.save_to_file()
+		self.loginfo("New server {} initialized.".format(str(ctx.guild.id)))
 		await ctx.send("Server initialized. You are now an admin. This is now the default channel.")
 
 	@commands.command()
@@ -61,6 +68,7 @@ class Settings(commands.Cog):
 		ss.update_guild(gName, gServer, gReg)
 		self.settings[ctx.guild.id] = ss
 		self.settings.save_to_file()
+		self.loginfo("Server {} guild info updated to <{} {}-{}>".format(ctx.guild.id, gName, gServer, gReg))
 		await ctx.send("Server guild set to <{} {}-{}>".format(gName, gServer, gReg))
 
 	@commands.command()
@@ -72,6 +80,7 @@ class Settings(commands.Cog):
 		ss.set_default_channel(ctx.channel.id)
 		self.settings[ctx.guild.id] = ss
 		self.settings.save_to_file()
+		self.loginfo("Server {} default channel updated to {}".format(ctx.guild.id, ctx.channel.id))
 		await ctx.send("This is now the default channel!")
 
 	@commands.command()
@@ -82,6 +91,7 @@ class Settings(commands.Cog):
 		ss = self.settings[ctx.guild.id]
 		for member in ctx.message.mentions:
 			ss.add_admin(member.id)
+			self.loginfo("Admin {} added to server {} by {}".format(member.id, ctx.guild.id, ctx.message.author.id))
 		self.settings[ctx.guild.id] = ss
 		self.settings.save_to_file()
 		await ctx.send("Admins added!")
@@ -96,12 +106,16 @@ class Settings(commands.Cog):
 		for member in ctx.message.mentions:
 			rmrank = ss.admins.index(member.id)
 			if(rmrank == -1):
+				self.loginfo("Admin removal failed: {} tried to remove {} from {}".format(ctx.message.author.id, member.id, ctx.guild.id))
 				await ctx.send("{} is not an admin!".format(member.nick))
 			elif(rmrank < rank):
+				self.loginfo("Admin removal failed: {} tried to remove {} from {}".format(ctx.message.author.id, member.id, ctx.guild.id))
 				await ctx.send("{} outranks you!".format(member.nick))
 			elif(len(ss.admins) == 1):
+				self.loginfo("Admin removal failed: {} tried to remove {} from {}".format(ctx.message.author.id, member.id, ctx.guild.id))
 				await ctx.send("{} is the only admin! Can't remove them.".format(member.nick))
 			else:
+				self.loginfo("Admin {} removed from server {} by {}".format(member.id, ctx.guild.id, ctx.message.author.id))
 				ss.remove_admin(member.id)
 		self.settings[ctx.guild.id] = ss
 		self.settings.save_to_file()
@@ -117,6 +131,7 @@ class Settings(commands.Cog):
 		ss.toggle_auto_report()
 		self.settings[ctx.guild.id] = ss
 		self.settings.save_to_file()
+		self.loginfo("Auto report set to {} for server {}".format(ss.auto_report, ctx.guild.id))
 		await ctx.send("Auto Report mode is now set to {}.".format(ss.auto_report))
 
 	@commands.command(aliases=["longmode"])
@@ -129,6 +144,7 @@ class Settings(commands.Cog):
 		ss.toggle_auto_report_mode()
 		self.settings[ctx.guild.id] = ss
 		self.settings.save_to_file()
+		self.loginfo("Long auto report set to {} for server {}".format(ss.auto_report_mode_long, ctx.guild.id))
 		await ctx.send("Long Auto Report mode is now set to {}.".format(ss.auto_report_mode_long))
 
 	@commands.command(aliases=["resethistory"])
@@ -145,6 +161,7 @@ class Settings(commands.Cog):
 		ss.most_recent_log_summary = 0
 		self.settings[ctx.guild.id] = ss
 		self.settings.save_to_file()
+		self.logwarn("Restting report history for server {}".format(ctx.guild.id))
 		await ctx.send("Reset server history.")
 
 

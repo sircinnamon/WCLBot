@@ -27,5 +27,8 @@ class Auth(commands.Cog):
 		serv = ctx.message.guild.id
 		return settings[serv].has_guild()
 
+	def owner_only(self, ctx):
+		return ctx.message.author.id == 135814157491634177
+
 def setup(bot):
 	bot.add_cog(Auth(bot))
