@@ -20,6 +20,11 @@ class Settings(commands.Cog):
 				return ctx.bot.get_cog("Auth").initialized_only(ctx)
 		return commands.check(pred)
 
+	def guild_defined():
+		def pred(ctx):
+				return ctx.bot.get_cog("Auth").guild_defined(ctx)
+		return commands.check(pred)
+
 	@commands.command(aliases=["set", "setty"])
 	@commands.guild_only()
 	@admin_only()
@@ -100,6 +105,30 @@ class Settings(commands.Cog):
 		self.settings[ctx.guild.id] = ss
 		self.settings.save_to_file()
 		await ctx.send("Admins updated!")
+
+	@commands.command()
+	@commands.guild_only()
+	@admin_only()
+	@initialized_only()
+	@guild_defined()
+	async def auto(self, ctx):
+		ss = self.settings[ctx.guild.id]
+		ss.toggle_auto_report()
+		self.settings[ctx.guild.id] = ss
+		self.settings.save_to_file()
+		await ctx.send("Auto Report mode is now set to {}.".format(ss.auto_report))
+
+	@commands.command(aliases=["longmode"])
+	@commands.guild_only()
+	@admin_only()
+	@initialized_only()
+	@guild_defined()
+	async def long(self, ctx):
+		ss = self.settings[ctx.guild.id]
+		ss.toggle_auto_report_mode()
+		self.settings[ctx.guild.id] = ss
+		self.settings.save_to_file()
+		await ctx.send("Long Auto Report mode is now set to {}.".format(ss.auto_report_mode_long))
 
 
 def setup(bot):

@@ -22,5 +22,10 @@ class Auth(commands.Cog):
 		if(serv not in settings): return False
 		return True
 
+	def guild_defined(self, ctx):
+		settings = ctx.bot.get_cog("Settings").settings
+		serv = ctx.message.guild.id
+		return settings[serv].has_guild()
+
 def setup(bot):
 	bot.add_cog(Auth(bot))
