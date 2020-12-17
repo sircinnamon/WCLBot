@@ -1,5 +1,6 @@
 from discord.ext import commands
 from ServerInfo import ServerInfo
+from datetime import datetime
 import re
 
 class Settings(commands.Cog):
@@ -129,6 +130,22 @@ class Settings(commands.Cog):
 		self.settings[ctx.guild.id] = ss
 		self.settings.save_to_file()
 		await ctx.send("Long Auto Report mode is now set to {}.".format(ss.auto_report_mode_long))
+
+	@commands.command(aliases=["resethistory"])
+	@commands.guild_only()
+	@admin_only()
+	@initialized_only()
+	@guild_defined()
+	async def reset(self, ctx):
+		ss = self.settings[ctx.guild.id]
+		ss.toggle_auto_report_mode()
+		now = int(datetime.now().timestamp() * 1000) # Current time as ms since epoch
+		ss.most_recent_log_start = now
+		ss.most_recent_log_end = now
+		ss.most_recent_log_summary = 0
+		self.settings[ctx.guild.id] = ss
+		self.settings.save_to_file()
+		await ctx.send("Reset server history.")
 
 
 def setup(bot):
