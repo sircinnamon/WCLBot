@@ -25,7 +25,7 @@ class Settings(commands.Cog):
 				return ctx.bot.get_cog("Auth").guild_defined(ctx)
 		return commands.check(pred)
 
-	@commands.command(aliases=["set", "setty"])
+	@commands.command(aliases=["set", "setty", "debug"])
 	@commands.guild_only()
 	@admin_only()
 	async def settings(self, ctx):
