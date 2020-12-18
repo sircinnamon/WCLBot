@@ -344,6 +344,57 @@ class WCL(commands.Cog):
 		)
 		return format_str
 
+
+	def attendance_embed(self, att_data, length):
+		embed = Embed()
+		embed.title = "{0:<75}|".format("Attendance Chart")
+		enddate = self.timestamp_to_tzdate(att_data[0]["endTime"]).strftime('%Y-%m-%d')
+		startdate = self.timestamp_to_tzdate(att_data[-1]["startTime"]).strftime('%Y-%m-%d')
+		embed.set_footer(text=startdate+" to "+enddate)
+		headers = self.attendance_table_header_string(att_data)
+		embed.description="```{}{}```".format(headers,self.attendance_table_string(att_data,length,14))
+		embed.set_thumbnail(url=self.ZONE_IMAGE_URL.format(att_data[0]["zone"]["id"]))
+		return embed
+
+	def attendance_table_string(self, att_data, length, name_width=18):
+		rep_atts = {}
+		player_atts = {}
+		for report in att_data:
+			idmap = {}
+			rep_att = set()
+			for actor in report["masterData"]["actors"]:
+				idmap[actor["id"]] = actor["name"]
+			for fight in report["fights"]:
+				for attender in fight["friendlyPlayers"]:
+					rep_att.add(idmap[attender])
+					if(idmap[attender] not in player_atts):
+						player_atts[idmap[attender]] = set()
+					player_atts[idmap[attender]].add(report["code"])
+			rep_atts[report["code"]] = rep_att
+		nameorder = list(player_atts.keys())
+		nameorder.sort(key=lambda x: len(player_atts[x]), reverse=True)
+		nameorder = nameorder[:length]
+		string = ""
+		for name in nameorder:
+			att_arr = [(x in player_atts[name]) for x in list(rep_atts.keys())]
+			string += self.attendance_table_string_row(name, att_arr, name_width)
+		return string
+
+	def attendance_table_string_row(self, name, att_arr, width=18):
+		string = ""
+		if len(name) > 18:
+			name = name[:width-3]+"..."
+		att_str = "".join(list(map(lambda x: "X" if x else "_", att_arr)))
+		att_percent = att_arr.count(True)/len(att_arr)
+		string = "{:<{width}}{:<5.0%}{}\n".format(name, att_percent, att_str, width=width)
+		return string
+
+	def attendance_table_header_string(self, att_data):
+		report_days = ""
+		for report in att_data:
+			report_days += self.timestamp_to_tzdate(report["startTime"]).strftime('%a')[0]
+		return "{:<13}|{:<4}|{}\n".format("NAME"," %",report_days.upper())
+
 	def abbreviate_num(self, num):
 		for unit in ['','K','M','B','T','Q']:
 			if(abs(num)<1000):
@@ -461,57 +512,6 @@ class WCL(commands.Cog):
 			embed = self.attendance_embed(attendance_data, length)
 
 			await ctx.send(embed=embed)
-
-	def attendance_embed(self, att_data, length):
-		embed = Embed()
-		embed.title = "{0:<75}|".format("Attendance Chart")
-		enddate = self.timestamp_to_tzdate(att_data[0]["endTime"]).strftime('%Y-%m-%d')
-		startdate = self.timestamp_to_tzdate(att_data[-1]["startTime"]).strftime('%Y-%m-%d')
-		embed.set_footer(text=startdate+" to "+enddate)
-		headers = self.attendance_table_header_string(att_data)
-		embed.description="```{}{}```".format(headers,self.attendance_table_string(att_data,length,14))
-		embed.set_thumbnail(url=self.ZONE_IMAGE_URL.format(att_data[0]["zone"]["id"]))
-		return embed
-
-	def attendance_table_string(self, att_data, length, name_width=18):
-		rep_atts = {}
-		player_atts = {}
-		for report in att_data:
-			idmap = {}
-			rep_att = set()
-			for actor in report["masterData"]["actors"]:
-				idmap[actor["id"]] = actor["name"]
-			for fight in report["fights"]:
-				for attender in fight["friendlyPlayers"]:
-					rep_att.add(idmap[attender])
-					if(idmap[attender] not in player_atts):
-						player_atts[idmap[attender]] = set()
-					player_atts[idmap[attender]].add(report["code"])
-			rep_atts[report["code"]] = rep_att
-		nameorder = list(player_atts.keys())
-		nameorder.sort(key=lambda x: len(player_atts[x]), reverse=True)
-		nameorder = nameorder[:length]
-		string = ""
-		for name in nameorder:
-			att_arr = [(x in player_atts[name]) for x in list(rep_atts.keys())]
-			string += self.attendance_table_string_row(name, att_arr, name_width)
-		return string
-
-	def attendance_table_string_row(self, name, att_arr, width=18):
-		string = ""
-		if len(name) > 18:
-			name = name[:width-3]+"..."
-		att_str = "".join(list(map(lambda x: "X" if x else "_", att_arr)))
-		att_percent = att_arr.count(True)/len(att_arr)
-		string = "{:<{width}}{:<5.0%}{}\n".format(name, att_percent, att_str, width=width)
-		return string
-
-	def attendance_table_header_string(self, att_data):
-		report_days = ""
-		for report in att_data:
-			report_days += self.timestamp_to_tzdate(report["startTime"]).strftime('%a')[0]
-		return "{:<13}|{:<4}|{}\n".format("NAME"," %",report_days.upper())
-
 
 def setup(bot):
 	bot.add_cog(WCL(bot))
