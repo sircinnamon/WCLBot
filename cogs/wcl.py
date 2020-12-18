@@ -117,6 +117,9 @@ class WCL(commands.Cog):
 						name
 						difficulty
 						encounterID
+						kill
+						fightPercentage
+						id
 					}}
 					{extraFields}
 				}}
@@ -234,6 +237,17 @@ class WCL(commands.Cog):
 		embed.colour = Colour(self.colour_map(self.get_difficulty(difficulty)))
 		return embed
 
+	def fight_list_embed(self, report):
+		embed = self.report_summary_embed(report)
+		embed.description = "```{}```".format(self.fight_list_string_long(report))
+		difficulty = 0
+		if("fights" in report and len(report["fights"]) > 0):
+			difficulty = max([0]+[x["difficulty"] for x in report["fights"] if x["difficulty"] != None])
+		embed.colour = Colour(self.colour_map(self.get_difficulty(difficulty)))
+		if("zone" in report):
+			embed.set_thumbnail(url=self.ZONE_IMAGE_URL.format(report["zone"]["id"]))
+		return embed
+
 	def fight_list_string_short(self, fightlist):
 		string = ""
 		bossfights = [x for x in fightlist if x["encounterID"] != 0]
@@ -251,6 +265,20 @@ class WCL(commands.Cog):
 				count = "x{}".format(fightcount[k])
 			diffstring = self.get_difficulty(diff)[0]
 			string += "{} {:<25} {}\n".format(diffstring, name, count)
+		return string
+
+
+	def fight_list_string_long(self, report):
+		string = ""
+		bossfights = [x for x in report["fights"] if x["encounterID"] != 0]
+		for fight in bossfights:
+			difficulty = self.get_difficulty(fight["difficulty"])[0]
+			percent="  ??"
+			if(fight["kill"]):
+				percent="  Kill"
+			else:
+				percent = "{:>6.2%}".format(fight["fightPercentage"]/100)
+			string += "{:>3}: {} {:<22} - {}\n".format(fight["id"], difficulty, fight["name"], percent)
 		return string
 
 	def table_string(self, table, length, name_width=18, total=0):
@@ -340,6 +368,32 @@ class WCL(commands.Cog):
 				embed = self.report_summary_embed_long(self.get_report_detailed(rep_id, extraFields=extraFields))
 			elif ss.has_guild():
 				embed = self.report_summary_embed_long(self.most_recent_report(ctx.guild.id, detailed=True, extraFields=extraFields))
+			else: await ctx.send("No guild or report id provided!"); return
+
+			await ctx.send(embed=embed)
+
+	@commands.command(aliases=["fight"])
+	@initialized_only()
+	async def fights(self, ctx, rep_id: typing.Optional[str]):
+		async with ctx.channel.typing():
+			ss = ctx.bot.get_cog("Settings").settings[ctx.guild.id]
+			extraFields = ""
+			extraFields += self.TABLE_QUERY_ALL.format(
+				alias="healingTable",
+				view="Healing",
+				startTime=0,
+				endTime=int(time()*1000)
+			)
+			extraFields += self.TABLE_QUERY_ALL.format(
+				alias="damageTable",
+				view="DamageDone",
+				startTime=0,
+				endTime=int(time()*1000)
+			)
+			if rep_id:
+				embed = self.fight_list_embed(self.get_report_detailed(rep_id))
+			elif ss.has_guild():
+				embed = self.fight_list_embed(self.most_recent_report(ctx.guild.id, detailed=True))
 			else: await ctx.send("No guild or report id provided!"); return
 
 			await ctx.send(embed=embed)
