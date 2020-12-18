@@ -90,11 +90,11 @@ class WCL(commands.Cog):
 				raise Exception(json_data["errors"])
 			json_data = json_data["data"]["reportData"]["report"]
 		except KeyError as e:
-			logerror("Parse error in generate_guild_report_list: {}".format(e.args))
+			logerror("Parse error in get_report: {}".format(e.args))
 			#If the website is not a json obj, just return an empty set
 			json_data = None
 		except Exception as e:
-			self.logerror("Error in get_report_detailed req: {}".format(e))
+			self.logerror("Error in get_report req: {}".format(e))
 			json_data = None
 		return json_data
 
@@ -132,7 +132,7 @@ class WCL(commands.Cog):
 				raise Exception(json_data["errors"])
 			json_data = json_data["data"]["reportData"]["report"]
 		except KeyError as e:
-			self.logerror("Parse error in generate_guild_report_list: {}".format(e.args))
+			self.logerror("Parse error in get_report_detailed: {}".format(e.args))
 			#If the website is not a json obj, just return an empty set
 			json_data = None
 		except Exception as e:
@@ -181,7 +181,47 @@ class WCL(commands.Cog):
 			#If the website is not a json obj, just return an empty set
 			json_data = None
 		except Exception as e:
-			self.logerror("Error in get_report_detailed req: {}".format(e))
+			self.logerror("Error in generate_guild_report_list req: {}".format(e))
+			json_data = None
+		return json_data
+
+	def generate_guild_attendance_list(self, guild_name, server_name, server_region, page, limit):
+		query = """
+		query {{
+			reportData {{
+				reports(
+					guildName: "{name}"
+					guildServerSlug: "{server}"
+					guildServerRegion: "{region}"
+					page: {page}
+					limit: {limit}
+				) {{
+					data {{
+						code
+						title
+						startTime
+						endTime
+						zone {{ id }}
+						fights(killType: Encounters) {{ friendlyPlayers }}
+						masterData {{
+							actors(type: "Player") {{ name id }}
+						}}
+					}}
+				}}
+			}}
+		}}
+		""".format(name=guild_name, server=server_name, region=server_region, page=page, limit=limit)
+		try:
+			json_data = self.wcl.generic_request(query)
+			if "errors" in json_data:
+				raise Exception(json_data["errors"])
+			json_data = json_data["data"]["reportData"]["reports"]["data"]
+		except KeyError as e:
+			logerror("Parse error in generate_guild_attendance_list: {}".format(e.args))
+			#If the website is not a json obj, just return an empty set
+			json_data = None
+		except Exception as e:
+			self.logerror("Error in generate_guild_attendance_list req: {}".format(e))
 			json_data = None
 		return json_data
 
@@ -200,9 +240,7 @@ class WCL(commands.Cog):
 	def report_summary_embed(self, report):
 		if report == None or report == {}:
 			return Embed()
-		date = datetime.fromtimestamp(report["startTime"]/1000, tz=dateutil.tz.gettz("UTC"))
-		date.replace(tzinfo=dateutil.tz.gettz("US/Eastern"))
-		date = date.strftime("%Y-%m-%d")
+		date = self.timestamp_to_tzdate(report["startTime"]).strftime("%Y-%m-%d")
 		embed = Embed()
 		embed.title = "**{0:<60}** {1:>18}".format(report["title"], "("+str(report["code"])+")")
 		embed.url = "https://www.warcraftlogs.com/reports/"+str(report["code"])
@@ -289,7 +327,6 @@ class WCL(commands.Cog):
 			if(total == 0):
 				total = sum([x["total"] for x in table])
 			for player in table[:length]:
-				print(self.table_string_row_total(player, total, name_width))
 				string += self.table_string_row_total(player, total, name_width)+"\n"
 		elif(len(table) > 0 and "timestamp" in table[0]):
 			table.sort(key=lambda x: x["timestamp"])
@@ -328,6 +365,10 @@ class WCL(commands.Cog):
 			#Default color
 			return 0x979c9f
 
+	def timestamp_to_tzdate(self, ts):
+		date = datetime.fromtimestamp(ts/1000, tz=dateutil.tz.gettz("UTC"))
+		tz = dateutil.tz.gettz("US/Eastern")
+		return date.astimezone(tz)
 
 	# BOT COMMANDS
 
@@ -397,6 +438,80 @@ class WCL(commands.Cog):
 			else: await ctx.send("No guild or report id provided!"); return
 
 			await ctx.send(embed=embed)
+
+	@commands.command(aliases=["att"])
+	@initialized_only()
+	@guild_defined()
+	async def attendance(
+		self,
+		ctx,
+		range: typing.Optional[int] = 16,
+		page: typing.Optional[int] = 1,
+		length: typing.Optional[int] = 25
+	):
+		async with ctx.channel.typing():
+			ss = ctx.bot.get_cog("Settings").settings[ctx.guild.id]
+			attendance_data = self.generate_guild_attendance_list(
+				ss.guild_name,
+				ss.guild_realm,
+				ss.guild_region,
+				page,
+				min(range, 16)
+			)
+			embed = self.attendance_embed(attendance_data, length)
+
+			await ctx.send(embed=embed)
+
+	def attendance_embed(self, att_data, length):
+		embed = Embed()
+		embed.title = "{0:<75}|".format("Attendance Chart")
+		enddate = self.timestamp_to_tzdate(att_data[0]["endTime"]).strftime('%Y-%m-%d')
+		startdate = self.timestamp_to_tzdate(att_data[-1]["startTime"]).strftime('%Y-%m-%d')
+		embed.set_footer(text=startdate+" to "+enddate)
+		headers = self.attendance_table_header_string(att_data)
+		embed.description="```{}{}```".format(headers,self.attendance_table_string(att_data,length,14))
+		embed.set_thumbnail(url=self.ZONE_IMAGE_URL.format(att_data[0]["zone"]["id"]))
+		return embed
+
+	def attendance_table_string(self, att_data, length, name_width=18):
+		rep_atts = {}
+		player_atts = {}
+		for report in att_data:
+			idmap = {}
+			rep_att = set()
+			for actor in report["masterData"]["actors"]:
+				idmap[actor["id"]] = actor["name"]
+			for fight in report["fights"]:
+				for attender in fight["friendlyPlayers"]:
+					rep_att.add(idmap[attender])
+					if(idmap[attender] not in player_atts):
+						player_atts[idmap[attender]] = set()
+					player_atts[idmap[attender]].add(report["code"])
+			rep_atts[report["code"]] = rep_att
+		nameorder = list(player_atts.keys())
+		nameorder.sort(key=lambda x: len(player_atts[x]), reverse=True)
+		nameorder = nameorder[:length]
+		string = ""
+		for name in nameorder:
+			att_arr = [(x in player_atts[name]) for x in list(rep_atts.keys())]
+			string += self.attendance_table_string_row(name, att_arr, name_width)
+		return string
+
+	def attendance_table_string_row(self, name, att_arr, width=18):
+		string = ""
+		if len(name) > 18:
+			name = name[:width-3]+"..."
+		att_str = "".join(list(map(lambda x: "X" if x else "_", att_arr)))
+		att_percent = att_arr.count(True)/len(att_arr)
+		string = "{:<{width}}{:<5.0%}{}\n".format(name, att_percent, att_str, width=width)
+		return string
+
+	def attendance_table_header_string(self, att_data):
+		report_days = ""
+		for report in att_data:
+			report_days += self.timestamp_to_tzdate(report["startTime"]).strftime('%a')[0]
+		return "{:<13}|{:<4}|{}\n".format("NAME"," %",report_days.upper())
+
 
 def setup(bot):
 	bot.add_cog(WCL(bot))
