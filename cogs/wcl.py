@@ -261,6 +261,7 @@ class WCL(commands.Cog):
 			if(total == 0):
 				total = sum([x["total"] for x in table])
 			for player in table[:length]:
+				print(self.table_string_row_total(player, total, name_width))
 				string += self.table_string_row_total(player, total, name_width)+"\n"
 		elif(len(table) > 0 and "timestamp" in table[0]):
 			table.sort(key=lambda x: x["timestamp"])
@@ -336,7 +337,7 @@ class WCL(commands.Cog):
 				endTime=int(time()*1000)
 			)
 			if rep_id:
-				embed = self.report_summary_embed_long(self.get_report_detailed(rep_id))
+				embed = self.report_summary_embed_long(self.get_report_detailed(rep_id, extraFields=extraFields))
 			elif ss.has_guild():
 				embed = self.report_summary_embed_long(self.most_recent_report(ctx.guild.id, detailed=True, extraFields=extraFields))
 			else: await ctx.send("No guild or report id provided!"); return
