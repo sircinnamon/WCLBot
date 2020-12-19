@@ -40,7 +40,7 @@ class WCL(commands.Cog):
 			self.TABLE_QUERY_SOURCE = "{alias}: table(dataType: {view} startTime: {startTime} endTime: {endTime} sourceID: {sourceID})\n"
 			self.TABLE_QUERY_FIGHT = "{alias}: table(dataType: {view} endTime: {endTime} fightIDs: [{fightid}])\n"
 			self.TABLE_QUERY_FIGHT_SOURCE = "{alias}: table(dataType: {view} endTime: {endTime} fightIDs: [{fightid}] sourceID: {sourceID})\n"
-			self.ACTOR_QUERY = "{alias}: masterData{{ actors {{ name gameID id type subtype }} }}\n"
+			self.ACTOR_QUERY = "{alias}: masterData{{ actors {{ name gameID id type subType }} }}\n"
 
 	def init(self, connector):
 		self.wcl = connector
@@ -473,6 +473,19 @@ class WCL(commands.Cog):
 			report_days += self.timestamp_to_tzdate(report["startTime"]).strftime('%a')[0]
 		return "{:<13}|{:<4}|{}\n".format("NAME"," %",report_days.upper())
 
+	def actor_by_name(self, reportid, name, loosematch=True):
+		actors = self.generate_actor_list(reportid)
+		name = name.lower()
+		for a in actors:
+			if(a["name"].lower() == name):
+				return a
+		# Loosely match substring
+		if loosematch:
+			for a in actors:
+				if(name in a["name"].lower()):
+					return a
+		return None
+
 	def parse_args(self, args):
 		if(args==None): return {}
 		arg_dict = {}
@@ -487,7 +500,10 @@ class WCL(commands.Cog):
 			"damagetaken":"DamageTaken",
 			"tank":"DamageTaken",
 			"dt":"DamageTaken",
-		}
+		}		
+		if(isinstance(args, str)):
+			if(args.lower() in aliases): return aliases[args.lower()]
+			else: return args
 		for arg in args:
 			m = re.match(r"(\w+)=([\w-]+)", arg)
 			if(m):
@@ -536,9 +552,8 @@ class WCL(commands.Cog):
 		# 	elif a.startswith("end="):
 		# 		end = int(a.split("end=")[1])
 		# raw = self.generate_guild_report_list(ss.guild_name, ss.guild_realm, ss.guild_region, start=start, end=end)
-		raw = self.most_recent_report(ctx.guild.id)
-		rep = self.get_report(raw["code"])
-		await ctx.send("```{}```".format(rep))
+		raw = self.actor_by_name(self.most_recent_report(ctx.guild.id)["code"], args[0])
+		await ctx.send("```{}```".format(raw))
 
 	@commands.command(aliases=["rep"])
 	@initialized_only()
@@ -618,11 +633,12 @@ class WCL(commands.Cog):
 	async def table(
 		self,
 		ctx,
+		view: str,
 		*args
 	):
 		async with ctx.channel.typing():
+			view = self.parse_args(view)
 			args = self.parse_args(args)
-			view = args["view"] if "view" in args else "DamageDone"
 			fightID = int(args["fight"]) if "fight" in args else ""
 			length = int(args["length"]) if "length" in args else 20
 			bossId = 0
