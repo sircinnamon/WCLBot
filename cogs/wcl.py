@@ -1,10 +1,11 @@
 from discord.ext import commands
 from discord import Embed, Colour
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from time import time
 from requests.exceptions import HTTPError
 import dateutil.tz
 import typing
+import re
 
 class WCL(commands.Cog):
 
@@ -14,6 +15,7 @@ class WCL(commands.Cog):
 			self.bot = bot
 			self.wcl = None
 			self.ZONE_IMAGE_URL = "https://assets.rpglogs.com/img/warcraft/zones/zone-{}.png"
+			self.BOSS_IMAGE_URL = "https://assets.rpglogs.com/img/warcraft/bosses/{}-icon.jpg"
 			self.CLASS_COLOURS = {
 				"DeathKnight":0xC41F3B,
 				"DemonHunter":0xA330C9,
@@ -36,6 +38,8 @@ class WCL(commands.Cog):
 			}
 			self.TABLE_QUERY_ALL = "{alias}: table(dataType: {view} startTime: {startTime} endTime: {endTime})\n"
 			self.TABLE_QUERY_SOURCE = "{alias}: table(dataType: {view} startTime: {startTime} endTime: {endTime} sourceID: {sourceID})\n"
+			self.TABLE_QUERY_FIGHT = "{alias}: table(dataType: {view} endTime: {endTime} fightIDs: [{fightid}])\n"
+			self.TABLE_QUERY_FIGHT_SOURCE = "{alias}: table(dataType: {view} endTime: {endTime} fightIDs: [{fightid}] sourceID: {sourceID})\n"
 			self.ACTOR_QUERY = "{alias}: masterData{{ actors {{ name gameID id type subtype }} }}\n"
 
 	def init(self, connector):
@@ -120,6 +124,7 @@ class WCL(commands.Cog):
 						kill
 						fightPercentage
 						id
+						startTime
 					}}
 					{extraFields}
 				}}
@@ -140,16 +145,13 @@ class WCL(commands.Cog):
 			json_data = None
 		return json_data
 
-	def generate_guild_report_list(self, guild_name, server_name, server_region, start=None, end=None):
+	def generate_guild_report_list(self, guild_name, server_name, server_region):
 		"""Request a set of uploaded reports for a specified guild.
 
 		Keyword arguments:
 		start -- UNIX start time to contain search
 		end -- UNIX end time to contain search
 		"""
-		optionals = ""
-		optionals += "startTime: {} ".format(start) if start else ""
-		optionals += "endTime: {} ".format(end) if end else ""
 		query = """
 		query {{
 			reportData {{
@@ -157,20 +159,16 @@ class WCL(commands.Cog):
 					guildName: "{name}"
 					guildServerSlug: "{server}"
 					guildServerRegion: "{region}"
-					{optionals}
 				) {{
 					data {{
 						code
-						title
-						owner {{ name }}
 						startTime
 						endTime
-						zone {{ id }}
 					}}
 				}}
 			}}
 		}}
-		""".format(name=guild_name, server=server_name, region=server_region, optionals=optionals)
+		""".format(name=guild_name, server=server_name, region=server_region)
 		try:
 			json_data = self.wcl.generic_request(query)
 			if "errors" in json_data:
@@ -225,15 +223,41 @@ class WCL(commands.Cog):
 			json_data = None
 		return json_data
 
-	def most_recent_report(self, serverId, detailed=True, extraFields=""):
+	def generate_actor_list(self, reportId):
+		"""Request a single report by ID, getting only the actor list
+		"""
+		query = """
+		query {{
+			reportData {{
+				report(
+					code: "{code}"
+				) {{
+					{actorlist_query}
+				}}
+			}}
+		}}
+		""".format(code=reportId, actorlist_query=self.ACTOR_QUERY.format(alias="actors"))
+		try:
+			json_data = self.wcl.generic_request(query)
+			if "errors" in json_data:
+				raise Exception(json_data["errors"])
+			json_data = json_data["data"]["reportData"]["report"]["actors"]["actors"]
+		except KeyError as e:
+			logerror("Parse error in generate_actor_list: {}".format(e.args))
+			#If the website is not a json obj, just return an empty set
+			json_data = None
+		except Exception as e:
+			self.logerror("Error in generate_actor_list req: {}".format(e))
+			json_data = None
+		return json_data
+
+	def most_recent_report(self, serverId):
 		ss = self.bot.get_cog("Settings").settings[serverId]
 		if not ss.has_guild():
 			return None
 		reports = self.generate_guild_report_list(ss.guild_name, ss.guild_realm, ss.guild_region)
 		self.logdebug("Requested guild report list for server {}".format(serverId))
 		if(len(reports) > 0):
-			if(detailed):
-				return self.get_report_detailed(reports[0]["code"], extraFields=extraFields)
 			return reports[0]
 		else: return None
 
@@ -273,6 +297,47 @@ class WCL(commands.Cog):
 		except TypeError as ex:
 			self.logerror("Type Error in report_summary_embed_long: {} - {}".format(ex, ex.args))
 		embed.colour = Colour(self.colour_map(self.get_difficulty(difficulty)))
+		return embed
+
+	def table_embed(self, table_data, view, length, fightID):
+		bossname = "ALL"
+		bossid = 0
+		fight_timestamp = 0
+		if(fightID!=""):
+			fightID = int(fightID)
+			for f in table_data["fights"]:
+				if f["id"] == fightID:
+					bossname = f["name"]
+					bossid = f["encounterID"]
+					fight_timestamp = f["startTime"]
+
+		embed = Embed()
+		title = "**{0}** {1}".format(view.upper(), bossname)
+		embed.title = "{0:<95}{1}".format(title, "|")
+		embed.set_footer(text="Taken from report {}".format(table_data["code"]))
+		table = table_data["viewTable"]
+		entries = table["data"]["entries"]
+		if(len(entries) == 0):
+			embed.description="```{}```".format("No results found!")
+			embed.color = Colour.red()
+			return embed
+		if(view in ["DamageDone", "DamageTaken", "Healing", "Summons", "Casts"]):
+			# Events with a total to sort by
+			entries.sort(key=lambda x: x["total"], reverse=True)
+			table["data"]["entries"] = entries
+			embed.description="```{}```".format(self.table_string(table, length))
+			embed.color = Colour(self.colour_map(entries[0]["type"]))
+		elif(view in ["Deaths"]):
+			# List type events
+			embed.description="```{}```".format(self.table_string(table, length, ts_offset=fight_timestamp))
+			embed.color = Colour(self.colour_map(entries[0]["type"]))
+		else:
+			embed.description="```{}```".format("View not supported. Try DamageDone, Healing, DamageTaken.")
+			embed.color = Colour.red()
+		if(bossid==0):
+			embed.set_thumbnail(url=self.ZONE_IMAGE_URL.format(table_data["zone"]["id"]))
+		else:
+			embed.set_thumbnail(url=self.BOSS_IMAGE_URL.format(bossid))
 		return embed
 
 	def fight_list_embed(self, report):
@@ -319,7 +384,7 @@ class WCL(commands.Cog):
 			string += "{:>3}: {} {:<22} - {}\n".format(fight["id"], difficulty, fight["name"], percent)
 		return string
 
-	def table_string(self, table, length, name_width=18, total=0):
+	def table_string(self, table, length, name_width=18, total=0, ts_offset=0):
 		string = ""
 		table = [entry for entry in table["data"]["entries"]]
 		if(len(table) > 0 and "total" in table[0]):
@@ -330,7 +395,8 @@ class WCL(commands.Cog):
 				string += self.table_string_row_total(player, total, name_width)+"\n"
 		elif(len(table) > 0 and "timestamp" in table[0]):
 			table.sort(key=lambda x: x["timestamp"])
-			string += self.table_string_row_time(player, name_width)+"\n"
+			for player in table[:length]:
+				string += self.table_string_row_time(player, name_width, ts_offset=ts_offset)+"\n"
 		return string
 
 	def table_string_row_total(self, table_entry, total, width=18):
@@ -340,6 +406,18 @@ class WCL(commands.Cog):
 			name,
 			self.abbreviate_num(table_entry["total"]),
 			(table_entry["total"]/total if total!= 0 else 0),
+			namewidth=width
+		)
+		return format_str
+
+	def table_string_row_time(self, table_entry, total, width=18, ts_offset=0):
+		name = table_entry["name"]
+		if(len(name)>width): name = name[:width-3]+"..."
+		secs = round((int(table_entry["timestamp"])-ts_offset)/1000)
+		timestamp = str(timedelta(seconds=secs))
+		format_str = "{:<{namewidth}}{:>10} ".format(
+			name,
+			timestamp,
 			namewidth=width
 		)
 		return format_str
@@ -394,6 +472,30 @@ class WCL(commands.Cog):
 		for report in att_data:
 			report_days += self.timestamp_to_tzdate(report["startTime"]).strftime('%a')[0]
 		return "{:<13}|{:<4}|{}\n".format("NAME"," %",report_days.upper())
+
+	def parse_args(self, args):
+		if(args==None): return {}
+		arg_dict = {}
+		aliases = {
+			"dps":"DamageDone",
+			"dd":"DamageDone",
+			"damagedone":"DamageDone",
+			"hps":"Healing",
+			"healer":"Healing",
+			"heal":"Healing",
+			"healing":"Healing",
+			"damagetaken":"DamageTaken",
+			"tank":"DamageTaken",
+			"dt":"DamageTaken",
+		}
+		for arg in args:
+			m = re.match(r"(\w+)=([\w-]+)", arg)
+			if(m):
+				val = m.group(2)
+				if val.lower() in aliases: val = aliases[val.lower()]
+				arg_dict[m.group(1)] = val
+		return arg_dict
+
 
 	def abbreviate_num(self, num):
 		for unit in ['','K','M','B','T','Q']:
@@ -456,12 +558,17 @@ class WCL(commands.Cog):
 				startTime=0,
 				endTime=int(time()*1000)
 			)
-			if rep_id:
-				embed = self.report_summary_embed_long(self.get_report_detailed(rep_id, extraFields=extraFields))
-			elif ss.has_guild():
-				embed = self.report_summary_embed_long(self.most_recent_report(ctx.guild.id, detailed=True, extraFields=extraFields))
-			else: await ctx.send("No guild or report id provided!"); return
-
+			if not rep_id and ss.has_guild():
+				rep = self.most_recent_report(ctx.guild.id)
+				if rep:
+					rep_id = rep["code"]
+				else:
+					await ctx.send("No reports found for guild!")
+					return
+			else:
+				await ctx.send("No guild or report id provided!")
+				return
+			embed = self.report_summary_embed_long(self.get_report_detailed(rep_id, extraFields=extraFields))
 			await ctx.send(embed=embed)
 
 	@commands.command(aliases=["fight"])
@@ -469,24 +576,17 @@ class WCL(commands.Cog):
 	async def fights(self, ctx, rep_id: typing.Optional[str]):
 		async with ctx.channel.typing():
 			ss = ctx.bot.get_cog("Settings").settings[ctx.guild.id]
-			extraFields = ""
-			extraFields += self.TABLE_QUERY_ALL.format(
-				alias="healingTable",
-				view="Healing",
-				startTime=0,
-				endTime=int(time()*1000)
-			)
-			extraFields += self.TABLE_QUERY_ALL.format(
-				alias="damageTable",
-				view="DamageDone",
-				startTime=0,
-				endTime=int(time()*1000)
-			)
-			if rep_id:
-				embed = self.fight_list_embed(self.get_report_detailed(rep_id))
-			elif ss.has_guild():
-				embed = self.fight_list_embed(self.most_recent_report(ctx.guild.id, detailed=True))
-			else: await ctx.send("No guild or report id provided!"); return
+			if not rep_id and ss.has_guild():
+				rep = self.most_recent_report(ctx.guild.id)
+				if rep:
+					rep_id = rep["code"]
+				else:
+					await ctx.send("No reports found for guild!")
+					return
+			else:
+				await ctx.send("No guild or report id provided!")
+				return
+			embed = self.fight_list_embed(self.get_report_detailed(rep_id))
 
 			await ctx.send(embed=embed)
 
@@ -511,6 +611,57 @@ class WCL(commands.Cog):
 			)
 			embed = self.attendance_embed(attendance_data, length)
 
+			await ctx.send(embed=embed)
+
+	@commands.command(aliases=["tbl"])
+	@initialized_only()
+	async def table(
+		self,
+		ctx,
+		*args
+	):
+		async with ctx.channel.typing():
+			args = self.parse_args(args)
+			view = args["view"] if "view" in args else "DamageDone"
+			fightID = int(args["fight"]) if "fight" in args else ""
+			length = int(args["length"]) if "length" in args else 20
+			bossId = 0
+
+			# Determine report to use
+			ss = ctx.bot.get_cog("Settings").settings[ctx.guild.id]
+			if("report" in args):
+				rep_id = args["report"]
+			elif ss.has_guild():
+				rep = self.most_recent_report(ctx.guild.id)
+				if rep:
+					rep_id = rep["code"]
+				else:
+					await ctx.send("No reports found for guild!")
+					return
+			else:
+				await ctx.send("No guild or report id provided!")
+				return
+
+			extraFields = ""
+			if(fightID != ""):
+				extraFields += self.TABLE_QUERY_FIGHT.format(
+					alias="viewTable",
+					view=view,
+					fightid=fightID,
+					endTime=int(time()*1000)
+				)
+			else:
+				extraFields += self.TABLE_QUERY_ALL.format(
+					alias="viewTable",
+					view=view,
+					startTime=0,
+					endTime=int(time()*1000)
+				)
+			table_data = self.get_report_detailed(rep_id, extraFields=extraFields)
+			if table_data is None:
+				await ctx.send("Bad request!")
+				return
+			embed = self.table_embed(table_data, view, length, fightID)
 			await ctx.send(embed=embed)
 
 def setup(bot):
