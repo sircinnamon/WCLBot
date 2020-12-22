@@ -41,6 +41,7 @@ class WCL(commands.Cog):
 			self.TABLE_QUERY_FIGHT = "{alias}: table(dataType: {view} endTime: {endTime} fightIDs: [{fightid}])\n"
 			self.TABLE_QUERY_FIGHT_SOURCE = "{alias}: table(dataType: {view} endTime: {endTime} fightIDs: [{fightid}] sourceID: {sourceID})\n"
 			self.ACTOR_QUERY = "{alias}: masterData{{ actors {{ name gameID id type subType }} }}\n"
+			self.FIGHT_QUERY = "{alias}: fights{{ id name friendlyPlayers kill }} {alias_mdata}: masterData{{ actors {{ name gameID id type subType}} }}\n"
 
 	def init(self, connector):
 		self.wcl = connector
@@ -248,6 +249,34 @@ class WCL(commands.Cog):
 			json_data = None
 		except Exception as e:
 			self.logerror("Error in generate_actor_list req: {}".format(e))
+			json_data = None
+		return json_data
+
+	def generate_fight_list(self, reportId):
+		"""Request a single report by ID, getting only the actor list
+		"""
+		query = """
+		query {{
+			reportData {{
+				report(
+					code: "{code}"
+				) {{
+					{fightlist_query}
+				}}
+			}}
+		}}
+		""".format(code=reportId, fightlist_query=self.FIGHT_QUERY.format(alias="fights", alias_mdata="masterData"))
+		try:
+			json_data = self.wcl.generic_request(query)
+			if "errors" in json_data:
+				raise Exception(json_data["errors"])
+			json_data = json_data["data"]["reportData"]["report"]
+		except KeyError as e:
+			logerror("Parse error in generate_fight_list: {}".format(e.args))
+			#If the website is not a json obj, just return an empty set
+			json_data = None
+		except Exception as e:
+			self.logerror("Error in generate_fight_list req: {}".format(e))
 			json_data = None
 		return json_data
 
@@ -475,6 +504,9 @@ class WCL(commands.Cog):
 
 	def actor_by_name(self, reportid, name, loosematch=True):
 		actors = self.generate_actor_list(reportid)
+		return self.actor_by_name_in_report(actors, name, loosematch)
+
+	def actor_by_name_in_report(self, actors, name, loosematch=True):
 		name = name.lower()
 		for a in actors:
 			if(a["name"].lower() == name):
@@ -485,6 +517,37 @@ class WCL(commands.Cog):
 				if(name in a["name"].lower()):
 					return a
 		return None
+
+	def fight_by_name(self, reportid, fight_search, loosematch=True, char_filter=None):
+		# Try and match a player given fight name to a fightID
+		report_info = self.generate_fight_list(reportid)
+		return self.fight_by_name_in_report(report_info, fight_search, loosematch=loosematch, char_filter=char_filter)
+
+	def fight_by_name_in_report(self, report, fight_search, loosematch=True, char_filter=None):
+		# If char_filter, reduce to an actor
+		if(len(report["fights"]) == 0): return None
+		actor_id = None
+		if(char_filter):
+			actor_id = actor_by_name_in_report(report["masterData"]["actors"], char_filter)["id"]
+		# Try and match a player given fight name to a fightID
+		fight_search = fight_search.lower()
+		best_match = None
+		for f in report["fights"]:
+			if(f["name"].lower() == fight_search):
+				if(f["kill"]):
+					return f
+				else:
+					best_match = f
+		if(best_match!=None): return best_match	
+		# Loosely match substring
+		if loosematch:
+			for f in report["fights"]:
+				if(fight_search in f["name"].lower()):
+					if(f["kill"]):
+						return f
+					else:
+						best_match = f
+		return best_match
 
 	def parse_args(self, args):
 		if(args==None): return {}
@@ -639,7 +702,7 @@ class WCL(commands.Cog):
 		async with ctx.channel.typing():
 			view = self.parse_args(view)
 			args = self.parse_args(args)
-			fightID = int(args["fight"]) if "fight" in args else ""
+			fightID = ""
 			length = int(args["length"]) if "length" in args else 20
 			bossId = 0
 
@@ -657,6 +720,16 @@ class WCL(commands.Cog):
 			else:
 				await ctx.send("No guild or report id provided!")
 				return
+
+			if("fight" in args):
+				if(args["fight"].isnumeric()): fightID = int(args["fight"])
+				else:
+					# Try a loose name match on bosses
+					fightID	= self.fight_by_name(rep_id, args["fight"])
+					if fightID is None:
+						await ctx.send("No fight found matching that argument!")
+						return
+					else: fightID = fightID["id"]
 
 			extraFields = ""
 			if(fightID != ""):
