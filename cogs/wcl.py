@@ -328,7 +328,7 @@ class WCL(commands.Cog):
 		embed.colour = Colour(self.colour_map(self.get_difficulty(difficulty)))
 		return embed
 
-	def table_embed(self, table_data, view, length, fightID):
+	def table_embed(self, table_data, view, length, fightID, actor=None):
 		bossname = "ALL"
 		bossid = 0
 		fight_timestamp = 0
@@ -336,13 +336,14 @@ class WCL(commands.Cog):
 			fightID = int(fightID)
 			for f in table_data["fights"]:
 				if f["id"] == fightID:
-					bossname = f["name"]
+					bossname = f["name"].upper()
 					bossid = f["encounterID"]
 					fight_timestamp = f["startTime"]
 
 		embed = Embed()
-		title = "**{0}** {1}".format(view.upper(), bossname)
-		embed.title = "{0:<95}{1}".format(title, "|")
+		actor_title = "" if not actor else actor["name"].upper()+" "
+		title = "**{}{}** {}".format(actor_title, view.upper(), bossname)
+		embed.title = title
 		embed.set_footer(text="Taken from report {}".format(table_data["code"]))
 		table = table_data["viewTable"]
 		entries = table["data"]["entries"]
@@ -355,11 +356,19 @@ class WCL(commands.Cog):
 			entries.sort(key=lambda x: x["total"], reverse=True)
 			table["data"]["entries"] = entries
 			embed.description="```{}```".format(self.table_string(table, length))
-			embed.color = Colour(self.colour_map(entries[0]["type"]))
+			
+			if not actor:
+				embed.color = Colour(self.colour_map(entries[0]["type"]))
+			else:
+				embed.color = Colour(self.colour_map(actor["subType"]))
 		elif(view in ["Deaths"]):
 			# List type events
 			embed.description="```{}```".format(self.table_string(table, length, ts_offset=fight_timestamp))
-			embed.color = Colour(self.colour_map(entries[0]["type"]))
+			
+			if not actor:
+				embed.color = Colour(self.colour_map(entries[0]["type"]))
+			else:
+				embed.color = Colour(self.colour_map(actor["subType"]))
 		else:
 			embed.description="```{}```".format("View not supported. Try DamageDone, Healing, DamageTaken.")
 			embed.color = Colour.red()
@@ -454,7 +463,7 @@ class WCL(commands.Cog):
 
 	def attendance_embed(self, att_data, length):
 		embed = Embed()
-		embed.title = "{0:<75}|".format("Attendance Chart")
+		embed.title = "Attendance Chart"
 		enddate = self.timestamp_to_tzdate(att_data[0]["endTime"]).strftime('%Y-%m-%d')
 		startdate = self.timestamp_to_tzdate(att_data[-1]["startTime"]).strftime('%Y-%m-%d')
 		embed.set_footer(text=startdate+" to "+enddate)
@@ -528,12 +537,14 @@ class WCL(commands.Cog):
 		if(len(report["fights"]) == 0): return None
 		actor_id = None
 		if(char_filter):
-			actor_id = actor_by_name_in_report(report["masterData"]["actors"], char_filter)["id"]
+			actor_id = self.actor_by_name_in_report(report["masterData"]["actors"], char_filter)["id"]
 		# Try and match a player given fight name to a fightID
 		fight_search = fight_search.lower()
 		best_match = None
 		for f in report["fights"]:
 			if(f["name"].lower() == fight_search):
+				if(actor_id and f["friendlyPlayers"] and actor_id not in f["friendlyPlayers"]):
+					continue
 				if(f["kill"]):
 					return f
 				else:
@@ -543,6 +554,8 @@ class WCL(commands.Cog):
 		if loosematch:
 			for f in report["fights"]:
 				if(fight_search in f["name"].lower()):
+					if(actor_id and f["friendlyPlayers"] and actor_id not in f["friendlyPlayers"]):
+						continue
 					if(f["kill"]):
 						return f
 					else:
@@ -556,6 +569,7 @@ class WCL(commands.Cog):
 			"dps":"DamageDone",
 			"dd":"DamageDone",
 			"damagedone":"DamageDone",
+			"damage":"DamageDone",
 			"hps":"Healing",
 			"healer":"Healing",
 			"heal":"Healing",
@@ -751,6 +765,80 @@ class WCL(commands.Cog):
 				await ctx.send("Bad request!")
 				return
 			embed = self.table_embed(table_data, view, length, fightID)
+			await ctx.send(embed=embed)
+
+	@commands.command()
+	@initialized_only()
+	async def char(
+		self,
+		ctx,
+		char: str,
+		view: str,
+		targetmode: typing.Optional[bool] = False,
+		*args
+	):
+		async with ctx.channel.typing():
+			view = self.parse_args(view)
+			args = self.parse_args(args)
+			fightID = ""
+			length = int(args["length"]) if "length" in args else 20
+			bossId = 0
+			charcolor = 0xFFFFFF
+
+			# Determine report to use
+			ss = ctx.bot.get_cog("Settings").settings[ctx.guild.id]
+			if("report" in args):
+				rep_id = args["report"]
+			elif ss.has_guild():
+				rep = self.most_recent_report(ctx.guild.id)
+				if rep:
+					rep_id = rep["code"]
+				else:
+					await ctx.send("No reports found for guild!")
+					return
+			else:
+				await ctx.send("No guild or report id provided!")
+				return
+
+			# Stage 1 request to identify character ID and fight ID
+			report_info = self.generate_fight_list(rep_id)
+			actor = self.actor_by_name_in_report(report_info["masterData"]["actors"], char)
+			if(actor == None):
+				await ctx.send("No character found matching that argument!")
+				return
+
+			if("fight" in args):
+				if(args["fight"].isnumeric()): fightID = int(args["fight"])
+				else:
+					# Try a loose name match on bosses
+					fightID	= self.fight_by_name_in_report(report_info, args["fight"], char_filter=char)
+					if fightID is None:
+						await ctx.send("No fight found matching that argument!")
+						return
+					else: fightID = fightID["id"]
+
+			extraFields = ""
+			if(fightID != ""):
+				extraFields += self.TABLE_QUERY_FIGHT_SOURCE.format(
+					alias="viewTable",
+					view=view,
+					fightid=fightID,
+					endTime=int(time()*1000),
+					sourceID=actor["id"]
+				)
+			else:
+				extraFields += self.TABLE_QUERY_SOURCE.format(
+					alias="viewTable",
+					view=view,
+					startTime=0,
+					endTime=int(time()*1000),
+					sourceID=actor["id"]
+				)
+			table_data = self.get_report_detailed(rep_id, extraFields=extraFields)
+			if table_data is None:
+				await ctx.send("Bad request!")
+				return
+			embed = self.table_embed(table_data, view, length, fightID, actor=actor)
 			await ctx.send(embed=embed)
 
 def setup(bot):
