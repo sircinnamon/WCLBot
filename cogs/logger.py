@@ -22,10 +22,10 @@ class Logger(commands.Cog):
 			await ctx.send("No logger defined.")
 			return
 		elif self.logger.getLogger().getEffectiveLevel() != self.logger.INFO:
-			self.logger.getLogger.setLevel(self.logger.info)
+			self.logger.getLogger().setLevel(self.logger.INFO)
 			level="INFO"
 		else:
-			self.logger.getLogger.setLevel(self.logger.debug)
+			self.logger.getLogger().setLevel(self.logger.DEBUG)
 			level="DEBUG"
 		await ctx.send("Log level set to {}.".format(level))
 
