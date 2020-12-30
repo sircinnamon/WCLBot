@@ -32,6 +32,19 @@ async def on_ready():
 async def hello(ctx):
 	await ctx.send("Hello!")
 
+@client.event
+async def on_command_error(ctx, error):
+	if isinstance(error, commands.MissingRequiredArgument):
+		await ctx.send(error)
+	elif isinstance(error, commands.BadArgument):
+		await ctx.send(error)
+	elif isinstance(error, commands.UserInputError):
+		logging.warn("Badly handled error!", error)
+		await ctx.send(error)
+	else:
+		logging.warn("Badly handled error!", error)
+		await ctx.send("Unknown error.")
+
 keys = {
 	"discord_token": None,
 	"client_id": None,
