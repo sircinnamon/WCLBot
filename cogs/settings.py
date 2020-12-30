@@ -32,6 +32,9 @@ class Settings(commands.Cog):
 	def logwarning(self, *args):
 		return self.bot.get_cog("Logger").warning(*args)
 
+	def force_save(self):
+		self.settings.save_to_file()
+
 	@commands.command(aliases=["set", "setty", "debug"])
 	@commands.guild_only()
 	@admin_only()
@@ -129,6 +132,9 @@ class Settings(commands.Cog):
 	async def auto(self, ctx):
 		ss = self.settings[ctx.guild.id]
 		ss.toggle_auto_report()
+		autochecker = self.bot.get_cog("Autochecker")
+		if(autochecker):
+			autochecker.start_new_report_loop(ctx.guild.id)
 		self.settings[ctx.guild.id] = ss
 		self.settings.save_to_file()
 		self.loginfo("Auto report set to {} for server {}".format(ss.auto_report, ctx.guild.id))
@@ -155,9 +161,9 @@ class Settings(commands.Cog):
 	async def reset(self, ctx):
 		ss = self.settings[ctx.guild.id]
 		ss.toggle_auto_report_mode()
-		now = int(datetime.now().timestamp() * 1000) # Current time as ms since epoch
-		ss.most_recent_log_start = now
-		ss.most_recent_log_end = now
+		recent = self.bot.get_cog("WCL").most_recent_report(ctx.guild.id)["startTime"]
+		ss.most_recent_log_start = recent
+		ss.most_recent_log_end = recent
 		ss.most_recent_log_summary = 0
 		self.settings[ctx.guild.id] = ss
 		self.settings.save_to_file()

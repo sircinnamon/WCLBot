@@ -146,7 +146,23 @@ class WCL(commands.Cog):
 			json_data = None
 		return json_data
 
-	def generate_guild_report_list(self, guild_name, server_name, server_region):
+	def get_report_summary_data(self, reportId):
+		extraFields = ""
+		extraFields += self.TABLE_QUERY_ALL.format(
+			alias="healingTable",
+			view="Healing",
+			startTime=0,
+			endTime=int(time()*1000)
+		)
+		extraFields += self.TABLE_QUERY_ALL.format(
+			alias="damageTable",
+			view="DamageDone",
+			startTime=0,
+			endTime=int(time()*1000)
+		)
+		return self.get_report_detailed(reportId, extraFields=extraFields)
+
+	def generate_guild_report_list(self, guild_name, server_name, server_region, startTime=0):
 		"""Request a set of uploaded reports for a specified guild.
 
 		Keyword arguments:
@@ -160,6 +176,7 @@ class WCL(commands.Cog):
 					guildName: "{name}"
 					guildServerSlug: "{server}"
 					guildServerRegion: "{region}"
+					startTime: {startTime}
 				) {{
 					data {{
 						code
@@ -169,7 +186,7 @@ class WCL(commands.Cog):
 				}}
 			}}
 		}}
-		""".format(name=guild_name, server=server_name, region=server_region)
+		""".format(name=guild_name, server=server_name, region=server_region, startTime=startTime)
 		try:
 			json_data = self.wcl.generic_request(query)
 			if "errors" in json_data:
@@ -637,19 +654,6 @@ class WCL(commands.Cog):
 	async def report(self, ctx, rep_id: typing.Optional[str]):
 		async with ctx.channel.typing():
 			ss = ctx.bot.get_cog("Settings").settings[ctx.guild.id]
-			extraFields = ""
-			extraFields += self.TABLE_QUERY_ALL.format(
-				alias="healingTable",
-				view="Healing",
-				startTime=0,
-				endTime=int(time()*1000)
-			)
-			extraFields += self.TABLE_QUERY_ALL.format(
-				alias="damageTable",
-				view="DamageDone",
-				startTime=0,
-				endTime=int(time()*1000)
-			)
 			if not rep_id and ss.has_guild():
 				rep = self.most_recent_report(ctx.guild.id)
 				if rep:
@@ -660,7 +664,7 @@ class WCL(commands.Cog):
 			else:
 				await ctx.send("No guild or report id provided!")
 				return
-			embed = self.report_summary_embed_long(self.get_report_detailed(rep_id, extraFields=extraFields))
+			embed = self.report_summary_embed_long(self.get_report_summary_data(rep_id))
 			await ctx.send(embed=embed)
 
 	@commands.command(aliases=["fight"])

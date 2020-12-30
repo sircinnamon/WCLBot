@@ -26,6 +26,7 @@ async def on_ready():
 		print("* {} ({})".format(server.name,server.id))
 	print('------')
 	logging.info("Logged in successfully")
+	client.get_cog("Autochecker").start_event_loop()
 
 @client.command()
 async def hello(ctx):
@@ -60,5 +61,6 @@ client.load_extension("cogs.auth")
 client.get_cog("Settings").initSettings(server_settings)
 client.load_extension("cogs.wcl")
 client.get_cog("WCL").init(wcl)
+client.load_extension("cogs.autochecker")
 
 client.run(keys["discord_token"])
