@@ -841,5 +841,35 @@ class WCL(commands.Cog):
 			embed = self.table_embed(table_data, view, length, fightID, actor=actor)
 			await ctx.send(embed=embed)
 
+	@commands.command(aliases=["damage", "dd", "damagedone"])
+	@initialized_only()
+	async def dps(
+		self,
+		ctx,
+		*args
+	):
+		view = "DamageDone"
+		await self.table(ctx, view, *args)
+
+	@commands.command(aliases=["heal", "hps", "h"])
+	@initialized_only()
+	async def healing(
+		self,
+		ctx,
+		*args
+	):
+		view = "Healing"
+		await self.table(ctx, view, *args)
+
+	@commands.command(aliases=["damagetaken", "dt", "tank"])
+	@initialized_only()
+	async def tanking(
+		self,
+		ctx,
+		*args
+	):
+		view = "DamageTaken"
+		await self.table(ctx, view, *args)
+
 def setup(bot):
 	bot.add_cog(WCL(bot))
