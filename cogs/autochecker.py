@@ -11,9 +11,9 @@ class Autochecker(commands.Cog):
 	def __init__(self, bot):
 			self.bot = bot
 			self.UPDATE_INTERVAL = 3600
-			self.AUTOREPORT_TRIGGER_INTERVAL = 10
+			self.AUTOREPORT_TRIGGER_INTERVAL = 300
 			self.SERVER_CHECK_SPACING = 3
-			self.REPORTQUEUE_CHECK_INTERVAL = 15
+			self.REPORTQUEUE_CHECK_INTERVAL = 10
 			self.report_queue = deque()
 
 	def start_event_loop(self):
@@ -31,15 +31,15 @@ class Autochecker(commands.Cog):
 		return commands.check(pred)
 
 	def loginfo(self, *args):
-		print(*args)
+		# print(*args)
 		return self.bot.get_cog("Logger").info(*args)
 
 	def logdebug(self, *args):
-		print(*args)
+		# print(*args)
 		return self.bot.get_cog("Logger").debug(*args)
 
 	def logwarn(self, *args):
-		print(*args)
+		# print(*args)
 		return self.bot.get_cog("Logger").warn(*args)
 
 	async def startup_auto_report(self):
@@ -171,6 +171,15 @@ class Autochecker(commands.Cog):
 			self.bot.get_cog("Settings").settings[message.guild.id].most_recent_log_summary = message.id
 			self.bot.get_cog("Settings").force_save()
 		self.bot.loop.create_task(self.check_report_queue())
+
+	@commands.command()
+	@commands.guild_only()
+	@initialized_only()
+	@guild_defined()
+	async def check(self, ctx):
+		# Force a check
+		await ctx.send("Checking for updates...")
+		self.bot.loop.create_task(self.auto_report_trigger(ctx.guild.id, refresh=False))
 
 
 def setup(bot):

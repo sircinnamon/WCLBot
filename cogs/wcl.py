@@ -182,6 +182,8 @@ class WCL(commands.Cog):
 						code
 						startTime
 						endTime
+						title
+						owner {{ name }}
 					}}
 				}}
 			}}
@@ -634,20 +636,6 @@ class WCL(commands.Cog):
 		return date.astimezone(tz)
 
 	# BOT COMMANDS
-
-	@commands.command()
-	async def temp(self, ctx, *args):
-		ss = ctx.bot.get_cog("Settings").settings[ctx.guild.id]
-		# start = None
-		# end = None
-		# for a in args:
-		# 	if a.startswith("start="):
-		# 		start = int(a.split("start=")[1])
-		# 	elif a.startswith("end="):
-		# 		end = int(a.split("end=")[1])
-		# raw = self.generate_guild_report_list(ss.guild_name, ss.guild_realm, ss.guild_region, start=start, end=end)
-		raw = self.actor_by_name(self.most_recent_report(ctx.guild.id)["code"], args[0])
-		await ctx.send("```{}```".format(raw))
 
 	@commands.command(aliases=["rep"])
 	@initialized_only()
