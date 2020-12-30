@@ -38,11 +38,19 @@ async def on_command_error(ctx, error):
 		await ctx.send(error)
 	elif isinstance(error, commands.BadArgument):
 		await ctx.send(error)
+	elif isinstance(error, commands.CheckFailure):
+		await ctx.send(error)
+	elif isinstance(error, commands.CommandNotFound):
+		await ctx.send(error)
 	elif isinstance(error, commands.UserInputError):
-		logging.warn("Badly handled error!", error)
+		logging.warning("Badly handled error!")
+		print(error)
+		print(type(error))
 		await ctx.send(error)
 	else:
-		logging.warn("Badly handled error!", error)
+		logging.warning("Badly handled error!")
+		print(error)
+		print(type(error))
 		await ctx.send("Unknown error.")
 
 keys = {
