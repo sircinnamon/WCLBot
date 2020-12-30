@@ -177,7 +177,7 @@ class Autochecker(commands.Cog):
 	@initialized_only()
 	@guild_defined()
 	async def check(self, ctx):
-		# Force a check
+		"""Force a check for new reports"""
 		await ctx.send("Checking for updates...")
 		self.bot.loop.create_task(self.auto_report_trigger(ctx.guild.id, refresh=False))
 

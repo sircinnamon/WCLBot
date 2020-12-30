@@ -39,11 +39,17 @@ class Settings(commands.Cog):
 	@commands.guild_only()
 	@admin_only()
 	async def settings(self, ctx):
+		"""Display currently stored settings and data about your server
+		"""
 		await ctx.send("```{}```".format(self.settings[ctx.guild.id]))
 
 	@commands.command(aliases=["initialize","i"])
 	@commands.guild_only()
 	async def init(self, ctx):
+		"""Add server to the database, allowing data to be stored.
+		
+		This is required to do many other commands. It only needs to be run once, unless you have kicked the bot from your server.
+		"""
 		if ctx.guild.id in self.settings:
 			await ctx.send("Server already initialized.")
 			return
@@ -59,10 +65,15 @@ class Settings(commands.Cog):
 	@commands.guild_only()
 	@admin_only()
 	@initialized_only()
-	async def guild(self, ctx, *, arg):
-		m = re.match(r"([A-z ]+) ([A-z']+)-([A-z]{2})", arg)
+	async def guild(self, ctx, *, guildstring):
+		"""Set default WoW Guild for server. Format: Guild Name Server-REGION
+
+		Remove special characters if possible.
+		Example: Vitium MalGanis-US
+		"""
+		m = re.match(r"([A-z ]+) ([A-z']+)-([A-z]{2})", guildstring)
 		if m is None:
-			await ctx.send("Couldn't parse guild name. Format is \"Guild Name ServerName-REGION\"")
+			await ctx.send("Couldn't parse guild name. Format is \"Guild Name Server-REGION\"")
 			return
 		ss = self.settings[ctx.guild.id]
 		gName = m.group(1)
@@ -79,6 +90,7 @@ class Settings(commands.Cog):
 	@admin_only()
 	@initialized_only()
 	async def channel(self, ctx):
+		"""Set current channel as the default for the bot to use"""
 		ss = self.settings[ctx.guild.id]
 		ss.set_default_channel(ctx.channel.id)
 		self.settings[ctx.guild.id] = ss
@@ -91,6 +103,7 @@ class Settings(commands.Cog):
 	@admin_only()
 	@initialized_only()
 	async def admin(self, ctx):
+		"""Set mentioned users as admins"""
 		ss = self.settings[ctx.guild.id]
 		for member in ctx.message.mentions:
 			ss.add_admin(member.id)
@@ -104,6 +117,7 @@ class Settings(commands.Cog):
 	@admin_only()
 	@initialized_only()
 	async def unadmin(self, ctx):
+		"""Remove mentioned users from admins"""
 		ss = self.settings[ctx.guild.id]
 		rank = ss.admins.index(ctx.message.author.id)
 		for member in ctx.message.mentions:
@@ -130,6 +144,11 @@ class Settings(commands.Cog):
 	@initialized_only()
 	@guild_defined()
 	async def auto(self, ctx):
+		"""Toggle auto reporting
+
+		When autoreporting is enabled, the bot will query your default guild for reports on warcraftlogs.
+		If a new report is found, it will display a summary of that report and a link in the default channel.
+		"""
 		ss = self.settings[ctx.guild.id]
 		ss.toggle_auto_report()
 		autochecker = self.bot.get_cog("Autochecker")
@@ -146,6 +165,10 @@ class Settings(commands.Cog):
 	@initialized_only()
 	@guild_defined()
 	async def long(self, ctx):
+		"""Toggle long summaries of auto reports
+
+		When enabled, report summaries will show a fight list as well as top dps and healers.
+		"""
 		ss = self.settings[ctx.guild.id]
 		ss.toggle_auto_report_mode()
 		self.settings[ctx.guild.id] = ss
@@ -159,6 +182,12 @@ class Settings(commands.Cog):
 	@initialized_only()
 	@guild_defined()
 	async def reset(self, ctx):
+		"""Reset settings related to autoreporting
+
+		If timestamps become corrupted this may allow them to be easily fixed.
+
+		This can happen if multiple overlapping logs are uploaded at once, or if a log is corrupted during upload.
+		"""
 		ss = self.settings[ctx.guild.id]
 		ss.toggle_auto_report_mode()
 		recent = self.bot.get_cog("WCL").most_recent_report(ctx.guild.id)["startTime"]

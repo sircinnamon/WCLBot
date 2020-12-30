@@ -13,7 +13,7 @@ class Logger(commands.Cog):
 	def init(self, lgr):
 		self.logger = lgr
 
-	@commands.command(aliases=["ll"])
+	@commands.command(aliases=["ll"], hidden=True)
 	@commands.guild_only()
 	@owner_only()
 	async def loglevel(self, ctx):

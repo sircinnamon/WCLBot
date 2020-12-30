@@ -596,6 +596,7 @@ class WCL(commands.Cog):
 			"damagetaken":"DamageTaken",
 			"tank":"DamageTaken",
 			"dt":"DamageTaken",
+			"deaths":"Deaths",
 		}		
 		if(isinstance(args, str)):
 			if(args.lower() in aliases): return aliases[args.lower()]
@@ -640,6 +641,10 @@ class WCL(commands.Cog):
 	@commands.command(aliases=["rep"])
 	@initialized_only()
 	async def report(self, ctx, rep_id: typing.Optional[str]):
+		"""Show a summary of a report (default: most recent)
+
+		rep_id -- If a report id is provided, a summary of that report will be shown instead
+		"""
 		async with ctx.channel.typing():
 			ss = ctx.bot.get_cog("Settings").settings[ctx.guild.id]
 			if not rep_id and ss.has_guild():
@@ -658,6 +663,12 @@ class WCL(commands.Cog):
 	@commands.command(aliases=["fight"])
 	@initialized_only()
 	async def fights(self, ctx, rep_id: typing.Optional[str]):
+		"""Show a fight list of a report (default: most recent)
+
+		rep_id -- If a report id is provided, a summary of that report will be shown instead
+
+		Fight list includes pull ids which can be used with other commands to see stats of a specific pull.
+		"""
 		async with ctx.channel.typing():
 			ss = ctx.bot.get_cog("Settings").settings[ctx.guild.id]
 			if not rep_id and ss.has_guild():
@@ -684,6 +695,13 @@ class WCL(commands.Cog):
 		page: typing.Optional[int] = 1,
 		length: typing.Optional[int] = 25
 	):
+		"""Show an attendance chart for a set of reports
+
+		range -- how many reports to check (default 16)
+		page -- which reports to look at (default 1). Page 1 will be the last range of reports.
+		length -- How many players to view, sorted by attendance percent (default 25)
+		"""
+
 		async with ctx.channel.typing():
 			ss = ctx.bot.get_cog("Settings").settings[ctx.guild.id]
 			attendance_data = self.generate_guild_attendance_list(
@@ -705,6 +723,13 @@ class WCL(commands.Cog):
 		view: str,
 		*args
 	):
+		"""Show a table of a specific stat
+
+		view -- REQUIRED. What stat to view (examples: "Healing", "DamageDone", "DamageTaken", "Deaths")
+		report -- which report to use, by code (default <most recent>)
+		fight -- Name of boss or Pull ID of fight to view (default all) (examples: "Denathrius", "10")
+		length -- How many rows to include on the table (default 20)
+		"""
 		async with ctx.channel.typing():
 			view = self.parse_args(view)
 			args = self.parse_args(args)
@@ -766,9 +791,16 @@ class WCL(commands.Cog):
 		ctx,
 		char: str,
 		view: str,
-		targetmode: typing.Optional[bool] = False,
 		*args
 	):
+		"""Show a table of a specific stat for a specific character
+
+		char -- REQUIRED. What character to view by name
+		view -- REQUIRED. What stat to view (examples: "Healing", "DamageDone", "DamageTaken", "Deaths")
+		report -- which report to use, by code (default <most recent>)
+		fight -- Name of boss or Pull ID of fight to view (default all) (examples: "Denathrius", "10")
+		length -- How many rows to include on the table (default 20)
+		"""
 		async with ctx.channel.typing():
 			view = self.parse_args(view)
 			args = self.parse_args(args)
@@ -840,6 +872,7 @@ class WCL(commands.Cog):
 		ctx,
 		*args
 	):
+		"""Shortcut for !wtable dps. See !whelp table for full info."""
 		view = "DamageDone"
 		await self.table(ctx, view, *args)
 
@@ -850,6 +883,7 @@ class WCL(commands.Cog):
 		ctx,
 		*args
 	):
+		"""Shortcut for !wtable healing. See !whelp table for full info."""
 		view = "Healing"
 		await self.table(ctx, view, *args)
 
@@ -860,6 +894,7 @@ class WCL(commands.Cog):
 		ctx,
 		*args
 	):
+		"""Shortcut for !wtable tanking. See !whelp table for full info."""
 		view = "DamageTaken"
 		await self.table(ctx, view, *args)
 

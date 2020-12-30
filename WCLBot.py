@@ -28,7 +28,7 @@ async def on_ready():
 	logging.info("Logged in successfully")
 	client.get_cog("Autochecker").start_event_loop()
 
-@client.command()
+@client.command(hidden=True)
 async def hello(ctx):
 	await ctx.send("Hello!")
 
