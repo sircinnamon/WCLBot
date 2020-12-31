@@ -12,7 +12,8 @@ class ServerInfoSet(MutableMapping):
 		if(os.path.isfile(file)):
 			with open(file, 'rb') as pkl_file:
 				inst = pickle.load(pkl_file)
-				if not isinstance(inst, ServerInfoSet): return ServerInfoSet()
+				if isinstance(inst, dict): inst = ServerInfoSet.legacy_convert(inst)
+				elif not isinstance(inst, ServerInfoSet): inst = ServerInfoSet()
 				inst.file = file
 				return inst
 		else:
@@ -28,6 +29,17 @@ class ServerInfoSet(MutableMapping):
 		with open(file, 'wb') as pkl_file:
 			pickle.dump(self, pkl_file)
 		return
+
+	@staticmethod
+	def legacy_convert(legacy):
+		# Old format was a dict of ServerInfo objs, easy to convert
+		print(legacy)
+		inst = ServerInfoSet()
+		for k in legacy.keys():
+			print(legacy[k])
+			if isinstance(legacy[k], ServerInfo):
+				inst[k] = legacy[k]
+		return inst
 
 	# MutableMapping Reqs
 	def __str__(self): return str(self.dict)
