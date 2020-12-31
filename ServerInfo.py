@@ -33,10 +33,8 @@ class ServerInfoSet(MutableMapping):
 	@staticmethod
 	def legacy_convert(legacy):
 		# Old format was a dict of ServerInfo objs, easy to convert
-		print(legacy)
 		inst = ServerInfoSet()
 		for k in legacy.keys():
-			print(legacy[k])
 			if isinstance(legacy[k], ServerInfo):
 				inst[k] = legacy[k]
 		return inst
