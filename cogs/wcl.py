@@ -654,6 +654,8 @@ class WCL(commands.Cog):
 				else:
 					await ctx.send("No reports found for guild!")
 					return
+			elif rep_id:
+				pass
 			else:
 				await ctx.send("No guild or report id provided!")
 				return
