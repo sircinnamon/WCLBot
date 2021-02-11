@@ -20,6 +20,7 @@ client = Bot(CMD_PREFIX)
 @client.listen('on_ready')
 async def on_ready():
 	print('Logged in as {} <{}>'.format(client.user.name, client.user.id))
+	print('Current Time: {}'.format(datetime.datetime.now()))
 	print('------')
 	print("Current servers:")
 	for server in client.guilds:
